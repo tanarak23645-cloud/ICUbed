@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{min-height:100vh;background:#eef1f4;font-family:'IBM Plex Sans Thai','IBM Plex Sans',system-ui,sans-serif;color:#15202b;-webkit-font-smoothing:antialiased}
@@ -23,6 +25,18 @@ button:hover{opacity:.9}
 <div id="app" style="min-height:100vh;--accent:#0f7b8a;--accent-d:#0b6470"></div>
 
 <script>
+// ─── FIREBASE CONFIG ─────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyCHqJqUQCxLrbKBPLg5qT6PfP6tpLoajnI",
+  authDomain: "icu-bed-booking.firebaseapp.com",
+  projectId: "icu-bed-booking",
+  storageBucket: "icu-bed-booking.firebasestorage.app",
+  messagingSenderId: "1078223906292",
+  appId: "1:1078223906292:web:c30aecba4672a3b83685a1"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const KEY = 'icu_booking_dechudom_v2';
 const CUR = '2026-06';
@@ -60,11 +74,33 @@ function blankForm() {
 }
 
 // ─── PERSISTENCE ─────────────────────────────────────────────────────────────
-function persist() {
-  try { localStorage.setItem(KEY, JSON.stringify(state.bookings)); } catch(e) {}
+async function persist() {
+  try {
+    const batch = db.batch();
+    const bookingsRef = db.collection('bookings');
+    await bookingsRef.get().then(snap => {
+      snap.docs.forEach(doc => batch.delete(doc.ref));
+    });
+    state.bookings.forEach(b => {
+      batch.set(bookingsRef.doc(String(b.id)), b);
+    });
+    await batch.commit();
+  } catch(e) { console.error('Firestore save error:', e); }
 }
-function loadData() {
-  try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+
+async function loadData() {
+  try {
+    const snap = await db.collection('bookings').get();
+    return snap.docs.map(doc => doc.data());
+  } catch(e) { console.error('Firestore load error:', e); return null; }
+}
+
+function setupRealtimeListener() {
+  db.collection('bookings').onSnapshot(snap => {
+    const bookings = snap.docs.map(doc => doc.data()).sort((a,b) => a.bookedAt - b.bookedAt);
+    state.bookings = bookings;
+    render();
+  }, err => console.error('Listener error:', err));
 }
 
 // ─── SEED DATA ───────────────────────────────────────────────────────────────
@@ -623,10 +659,17 @@ function doDownload(name, mime) {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-(function init() {
-  let data=loadData();
-  if (!data||!data.length) { data=seed(); localStorage.setItem(KEY,JSON.stringify(data)); }
-  state.bookings=data;
+(async function init() {
+  render(); // Show loading state
+  let data=await loadData();
+  if (!data||!data.length) {
+    data=seed();
+    state.bookings=data;
+    await persist();
+  } else {
+    state.bookings=data;
+  }
+  setupRealtimeListener();
   render();
 })();
 </script>
