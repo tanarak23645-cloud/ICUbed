@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ICU Bed Booking — รพ.สมเด็จพระยุพราชเดชอุดม</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;background:#eef1f4;font-family:'IBM Plex Sans Thai','IBM Plex Sans',system-ui,sans-serif;color:#15202b;-webkit-font-smoothing:antialiased}
+input,select,button,textarea{font-family:inherit}
+button{outline:none}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#c9d3dc;border-radius:8px;border:2px solid #eef1f4}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,16px)}to{opacity:1;transform:translate(-50%,0)}}
+input:focus,select:focus{border-color:var(--accent)!important;box-shadow:0 0 0 3px rgba(15,123,138,.12)!important}
+button:hover{opacity:.9}
+</style>
+</head>
+<body>
+<div id="app" style="min-height:100vh;--accent:#0f7b8a;--accent-d:#0b6470"></div>
+
+<script>
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const KEY = 'icu_booking_dechudom_v2';
+const CUR = '2026-06';
+const WARDS = ["หอผู้ป่วยศัลยกรรมชาย","หอผู้ป่วยศัลยกรรมหญิง","หอผู้ป่วย EENT","หอผู้ป่วยพิเศษศัลย์-ออร์โธ","หอผู้ป่วยอายุรกรรมชาย","หอผู้ป่วยอายุรกรรมหญิง","หอผู้ป่วยอายุรกรรม3","หอผู้ป่วย Cohort","หอผู้ป่วยพิเศษทวี-กันยา","ER","หอผู้ป่วยออร์โธปิดิกส์","OPD","หอผู้ป่วยสูติ-นรีฯ","หอผู้ป่วยพิเศษสูติ-นรีฯ","LR","อื่นๆ"];
+const DOCTORS = ["นพ.วิลพงษ์","นพ.พนัสบดี","นพ.ชัชระ","นพ.ภัทรดิศ","พญ.นิศาวร","พญ.ธิติมา","พญ.บัณฑิตา","นพ.ปิยะพล","พญ.อภิวรรณ","พญ.ศิริวรรณ","พญ.ธิรพร","นพ.อดิศักดิ์","นพ.ประกิจ","นพ.สังวร","นพ.ศิดรินทร์","พญ.ประภาพร","พญ.โชดิกา","พญ.กัลยาณี","นพ.ณพล","นพ.เทอดเกียรติ","นพ.สิทธิกร","นพ.พรบพิตร","พญ.กุลลิศรา"];
+const PREFIXES = ["นาย","นาง","นางสาว","เด็กหญิง","เด็กชาย"];
+const REASONS = ["กลับตึก","off OR","refer","death","on vent นอกตึก","เลื่อน OR"];
+const NURSES = ["พว.สุดารัตน์","พว.วรรณา","พว.ปรียา","พว.อรทัย","พว.มณีรัตน์"];
+const FNAMES = ["สมชาย","วิไล","ประสิทธิ์","มาลี","อนุชา","กนกพร","ธีระ","สุภาพร","วีระ","จันทร์เพ็ญ","ปกรณ์","ศิริพร","ชูเกียรติ","นงลักษณ์","ทวีศักดิ์","พรทิพย์","บุญส่ง","อรอุมา"];
+const LNAMES = ["ใจดี","ทองคำ","แสงทอง","บุญมี","วงศ์ไทย","ศรีสุข","พันธุ์ดี","มั่นคง","รุ่งเรือง","สุขสวัสดิ์"];
+const SURG_WARDS = ["หอผู้ป่วยศัลยกรรมชาย","หอผู้ป่วยศัลยกรรมหญิง","หอผู้ป่วยพิเศษศัลย์-ออร์โธ","หอผู้ป่วยออร์โธปิดิกส์","หอผู้ป่วย EENT","ER"];
+const MED_WARDS = ["หอผู้ป่วยอายุรกรรมชาย","หอผู้ป่วยอายุรกรรมหญิง","หอผู้ป่วยอายุรกรรม3","หอผู้ป่วย Cohort","ER","หอผู้ป่วยพิเศษทวี-กันยา"];
+const MED_DIAGS = ["Septic shock","Pneumonia c respiratory failure","Acute MI","CHF c pulmonary edema","CVA (Stroke)","Upper GI bleeding","DKA","COPD c AE","Severe sepsis","AKI on CKD"];
+const SURG_DIAGS = ["Post-op major surgery","Acute appendicitis c peritonitis","Perforated peptic ulcer","Bowel obstruction","Severe head injury","Multiple trauma","Necrotizing fasciitis","Acute abdomen","Obstructed hernia","Ruptured AAA"];
+const PROCS = ["Exploratory laparotomy","Appendectomy","ORIF","Craniotomy","Bowel resection","Debridement","Hemicolectomy"];
+const THM = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let state = {
+  screen: 'book',
+  bookings: [],
+  form: blankForm(),
+  queueFilter: 'pending',
+  queueSearch: '',
+  reportMode: 'month',
+  reportMonth: CUR,
+  reportFY: '2026',
+  toast: '',
+  formError: ''
+};
+let toastTimer = null;
+
+function blankForm() {
+  return {ward:'',doctor:'',hn:'',prefix:'',firstName:'',lastName:'',age:'',diagnosis:'',specialty:'',procedure:'',surgeryDate:'',bookingDate:'',time:'',planType:''};
+}
+
+// ─── PERSISTENCE ─────────────────────────────────────────────────────────────
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(state.bookings)); } catch(e) {}
+}
+function loadData() {
+  try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+}
+
+// ─── SEED DATA ───────────────────────────────────────────────────────────────
+function rnd(i) { const x = Math.sin((i+1)*99.73)*10000; return x-Math.floor(x); }
+function pick(arr,i) { return arr[Math.floor(rnd(i)*arr.length)]; }
+function skew(arr,i) { const r=rnd(i); return arr[Math.floor(r*r*arr.length)]; }
+
+function seed() {
+  const out=[], months=['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06'], per=[8,11,9,12,10,14];
+  let id=1000;
+  months.forEach((m,mi) => {
+    const yy=parseInt(m.split('-')[0]), mm=parseInt(m.split('-')[1]);
+    for (let k=0;k<per[mi];k++) {
+      const i=id-1000, isSurg=rnd(i*3+1)<0.5;
+      const spec=isSurg?'ศัลยกรรม':'อายุรกรรม';
+      const ward=pick(isSurg?SURG_WARDS:MED_WARDS,i*5+2);
+      const doctor=skew(DOCTORS,i*7+4);
+      const diagnosis=skew(isSurg?SURG_DIAGS:MED_DIAGS,i*5+1);
+      const prefix=pick(["นาย","นาง","นางสาว"],i*2);
+      const firstName=pick(FNAMES,i*3+2), lastName=pick(LNAMES,i*4+1);
+      const age=18+Math.floor(rnd(i*9+5)*72);
+      const day=1+Math.floor(rnd(i*11+7)*27);
+      const hour=Math.floor(rnd(i*13+3)*24), half=rnd(i*6+1)<0.5;
+      const oncall=rnd(i*17+2)<0.45;
+      const time=(oncall?'On call เวลา ':'ในเวลา ')+String(hour).padStart(2,'0')+'.'+(half?'30':'00')+' น.';
+      const planType=rnd(i*19+6)<0.4?'unplan icu':'Plan icu';
+      const procedure=isSurg?pick(PROCS,i*23+1):'';
+      const ds=yy+'-'+String(mm).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+      let status='admitted', reason='';
+      const rv=rnd(i*29+8);
+      if (m===CUR) {
+        if (rv<0.24) status='pending';
+        else if (rv<0.48) status='accepted';
+        else if (rv<0.62) { status='not_used'; reason=pick(REASONS,i*31+2); }
+        else status='admitted';
+      } else if (rv<0.2) { status='not_used'; reason=pick(REASONS,i*31+2); }
+      const nurse=status==='pending'?(rnd(i*37)<0.5?'':pick(NURSES,i*37+1)):pick(NURSES,i*37+1);
+      const summaryNurse=(status==='admitted'||status==='not_used')?pick(NURSES,i*43+5):'';
+      const hn=String(640000+Math.floor(rnd(i*41+9)*59999));
+      const bAt=new Date(yy,mm-1,day,hour,half?30:0).getTime();
+      out.push({id:id++,ward,doctor,hn,prefix,firstName,lastName,age,diagnosis,specialty:spec,procedure,surgeryDate:isSurg?ds:'',bookingDate:isSurg?'':ds,time,planType,status,notUsedReason:reason,nurse,summaryNurse,month:m,bookedAt:bAt,acceptedAt:status==='pending'?0:bAt});
+    }
+  });
+  return out;
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(d) { if (!d) return '—'; const p=String(d).split('-'); return p.length===3?(parseInt(p[2])+'/'+parseInt(p[1])):d; }
+function fmtFull(b) { const au=b.specialty==='อายุรกรรม', d=au?b.bookingDate:b.surgeryDate; if (!d) return '—'; const p=String(d).split('-'); return p.length===3?(parseInt(p[2])+'/'+parseInt(p[1])+'/'+(parseInt(p[0])+543)):d; }
+function mLabel(m) { const p=m.split('-'); return THM[parseInt(p[1])-1]+' '+(parseInt(p[0])+543); }
+function mShort(m) { return THM[parseInt(m.split('-')[1])-1]; }
+function fyOf(m) { const mo=parseInt(m.split('-')[1]); return mo>=10?parseInt(m.split('-')[0])+1:parseInt(m.split('-')[0]); }
+function fyLabel(fy) { return 'ปีงบประมาณ '+(fy+543); }
+function fyOrder(m) { const mo=parseInt(m.split('-')[1]); return mo>=10?mo-10:mo+2; }
+function shade(hex,f) { const n=parseInt(String(hex).slice(1),16); let r=(n>>16)&255,g=(n>>8)&255,b=n&255; return '#'+((1<<24)+(Math.round(r*f)<<16)+(Math.round(g*f)<<8)+Math.round(b*f)).toString(16).slice(1); }
+function countBy(list,fn) { const m={}; list.forEach(x=>{const k=fn(x);if(k)m[k]=(m[k]||0)+1;}); return m; }
+function toBars(map,color) { const arr=Object.keys(map).map(k=>({label:k,value:map[k]})); arr.sort((a,b)=>b.value-a.value); const mx=Math.max(1,...arr.map(x=>x.value)); return arr.map(x=>({label:x.label,value:x.value,pct:Math.max(7,Math.round(x.value/mx*100))+'%',color})); }
+function badge(bg,fg,txt) { return `<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:${bg};color:${fg}">${esc(txt)}</span>`; }
+function segBtn(label, active, attrs='') { return `<button type="button" ${attrs} style="display:inline-flex;align-items:center;justify-content:center;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:1px solid ${active?'var(--accent);background:var(--accent);color:#fff':' #d6dee6;background:#fff;color:#33414f'}">${label}</button>`; }
+
+
+function getScope() {
+  const bk=state.bookings;
+  if (state.reportMode==='year') {
+    const fy=parseInt(state.reportFY);
+    return {mode:'year',label:fyLabel(fy),fileTag:'FY'+(fy+543),periodText:'ปีงบประมาณ '+(fy+543)+' (ต.ค. '+(fy-1+543)+' – ก.ย. '+(fy+543)+')',list:bk.filter(b=>fyOf(b.month)===fy)};
+  }
+  const m=state.reportMonth;
+  return {mode:'month',label:mLabel(m),fileTag:m,periodText:'เดือน '+mLabel(m),list:bk.filter(b=>b.month===m)};
+}
+
+// ─── HTML BUILDERS ───────────────────────────────────────────────────────────
+function buildNav() {
+  const bk=state.bookings, pendCount=bk.filter(b=>b.status==='pending').length, accCount=bk.filter(b=>b.status==='accepted').length, tq=pendCount+accCount;
+  const tabs=[{key:'book',label:'จองเตียง ICU'},{key:'queue',label:'คิวรับจอง ICU'},{key:'report',label:'รายงานรายเดือน'}];
+  const btns=tabs.map(t=>{
+    const ac=state.screen===t.key;
+    const st=ac?'display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:10px;border:1px solid transparent;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer':'display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:10px;border:1px solid transparent;background:transparent;color:#5d6b7a;font-size:14px;font-weight:600;cursor:pointer';
+    let bdg='';
+    if (t.key==='queue'&&tq>0) { const bs=ac?'background:rgba(255,255,255,.25);color:#fff':'background:#fde3d0;color:#c2410c'; bdg=`<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:999px;font-size:11px;font-weight:700;${bs}">${tq}</span>`; }
+    return `<button data-nav="${t.key}" style="${st}">${esc(t.label)}${bdg}</button>`;
+  }).join('');
+  return `<div style="position:sticky;top:0;z-index:30;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid #e1e7ee"><div style="max-width:1200px;margin:0 auto;padding:0 22px;height:62px;display:flex;align-items:center;gap:16px"><div style="display:flex;align-items:center;gap:12px"><div style="width:38px;height:38px;border-radius:11px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:21px;font-weight:700;box-shadow:0 4px 12px rgba(15,123,138,.28)">+</div><div style="line-height:1.15"><div style="font-size:15px;font-weight:700;letter-spacing:-.2px">ICU Bed Booking</div><div style="font-size:11.5px;color:#6b7787;font-weight:500">รพ.สมเด็จพระยุพราชเดชอุดม</div></div></div><nav style="margin-left:auto;display:flex;gap:6px">${btns}</nav></div></div>`;
+}
+
+function buildBook() {
+  const f=state.form;
+  const wardOpts=['<option value="">— เลือกหน่วยงาน —</option>',...WARDS.map((w,i)=>`<option value="${esc(w)}"${f.ward===w?' selected':''}>${i+1}  ${esc(w)}</option>`)].join('');
+  const docOpts=['<option value="">— เลือกแพทย์เจ้าของไข้ —</option>',...DOCTORS.map((d,i)=>`<option value="${esc(d)}"${f.doctor===d?' selected':''}>${i+1}  ${esc(d)}</option>`)].join('');
+  const pfxBtns=PREFIXES.map(p=>segBtn(p,f.prefix===p,`data-pick="prefix" data-val="${esc(p)}"`)).join('');
+  const specBtns=['อายุรกรรม','ศัลยกรรม'].map(v=>segBtn(v,f.specialty===v,`data-pick="specialty" data-val="${v}"`)).join('');
+  const planBtns=[{v:'Plan icu',l:'Plan ICU'},{v:'unplan icu',l:'Unplan ICU'}].map(o=>segBtn(o.l,f.planType===o.v,`data-pick="planType" data-val="${esc(o.v)}"`)).join('');
+  let dateField='';
+  if (f.specialty==='ศัลยกรรม') dateField=`<div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">วันผ่าตัด <span style="font-weight:400;color:#9aa6b2">(เฉพาะศัลยกรรม)</span></label><input name="surgeryDate" value="${esc(f.surgeryDate)}" type="date" style="width:100%;padding:10px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none"></div>`;
+  else if (f.specialty==='อายุรกรรม') dateField=`<div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">วันจองเตียง <span style="font-weight:400;color:#9aa6b2">(เฉพาะอายุรกรรม)</span></label><input name="bookingDate" value="${esc(f.bookingDate)}" type="date" style="width:100%;padding:10px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none"></div>`;
+  const errHtml=state.formError?`<div style="margin-top:18px;padding:11px 14px;background:#fdecec;border:1px solid #f3c9c9;border-radius:10px;color:#b02a2a;font-size:13.5px;font-weight:500">${esc(state.formError)}</div>`:'';
+  const inp=(name,val,ph,extra='')=>`<input name="${name}" value="${esc(val)}" placeholder="${ph}" ${extra} style="width:100%;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none">`;
+  return `<div>
+  <div style="margin-bottom:22px"><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">แบบฟอร์มจองเตียง ICU</h1><p style="margin:0;font-size:14px;color:#6b7787">กรอกข้อมูลผู้ป่วยจาก ward ที่ต้องการส่งเข้า ICU — รายการที่บันทึกจะเข้าคิวรับเข้าทันที</p></div>
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04)">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:18px">ข้อมูลผู้ป่วย</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px 20px">
+        <div style="grid-column:1/-1"><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">หน่วยงานที่ส่งจอง <span style="color:#d64545">*</span></label><select name="ward" style="width:100%;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none">${wardOpts}</select></div>
+        <div style="grid-column:1/-1"><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">แพทย์เจ้าของไข้ <span style="color:#d64545">*</span></label><select name="doctor" style="width:100%;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none">${docOpts}</select></div>
+        <div style="grid-column:1/-1"><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">คำนำหน้าชื่อ <span style="color:#d64545">*</span></label><div style="display:flex;gap:8px;flex-wrap:wrap">${pfxBtns}</div></div>
+        <div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">ชื่อ <span style="color:#d64545">*</span></label>${inp('firstName',f.firstName,'ชื่อจริง')}</div>
+        <div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">สกุล <span style="color:#d64545">*</span></label>${inp('lastName',f.lastName,'นามสกุล')}</div>
+        <div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">HN <span style="color:#d64545">*</span></label><input name="hn" value="${esc(f.hn)}" placeholder="เลข HN" style="width:100%;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none;font-family:'IBM Plex Mono',monospace"></div>
+        <div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">อายุ (ปี) <span style="color:#d64545">*</span></label><input name="age" value="${esc(f.age)}" type="number" min="0" placeholder="ตัวเลขเท่านั้น" style="width:100%;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none;font-family:'IBM Plex Mono',monospace"></div>
+        <div style="grid-column:1/-1"><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">Diagnosis <span style="color:#d64545">*</span></label>${inp('diagnosis',f.diagnosis,'เช่น Septic shock, Post-op laparotomy')}</div>
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04)">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:18px">รายละเอียดการจอง</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px 20px">
+        <div style="grid-column:1/-1"><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">จองเตียงสาขา <span style="color:#d64545">*</span></label><div style="display:flex;gap:8px;flex-wrap:wrap">${specBtns}</div></div>
+        ${dateField}
+        <div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">หัตถการ / OR <span style="font-weight:400;color:#9aa6b2">(ไม่มีข้ามได้)</span></label>${inp('procedure',f.procedure,'เช่น Exploratory laparotomy')}</div>
+        <div style="grid-column:1/-1"><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">เวลาที่ผ่าตัด / เวลาที่จอง <span style="color:#d64545">*</span> <span style="font-weight:400;color:#9aa6b2">(ระบุ On call หรือ ในเวลา)</span></label>${inp('time',f.time,'เช่น On call เวลา 20.00 น.')}</div>
+        <div style="grid-column:1/-1"><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">Plan / Unplan <span style="color:#d64545">*</span></label><div style="display:flex;gap:8px;flex-wrap:wrap">${planBtns}</div></div>
+      </div>
+      ${errHtml}
+      <div style="display:flex;gap:10px;margin-top:22px;flex-wrap:wrap">
+        <button id="btn-submit" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border:none;border-radius:11px;background:var(--accent);color:#fff;font-size:14.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(15,123,138,.28)">บันทึกการจอง → เข้าคิว ICU</button>
+        <button id="btn-reset" style="padding:12px 20px;border:1px solid #d6dee6;border-radius:11px;background:#fff;color:#5d6b7a;font-size:14px;font-weight:600;cursor:pointer">ล้างฟอร์ม</button>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function buildQueueCard(b, no) {
+  const aury=b.specialty==='อายุรกรรม', oncall=String(b.time||'').includes('On call'), unplan=b.planType==='unplan icu';
+  const statusMap={pending:['#fef3e2','#b7791f','รอรับจอง'],accepted:['#e0f2f1','#0f766e','รับจองแล้ว'],admitted:['#e6f7ee','#0b7049','เข้า ICU แล้ว'],not_used:['#fdecec','#c0392b','ไม่ได้เข้า ICU']};
+  const [sbg,sfg,slbl]=statusMap[b.status]||statusMap.pending;
+  const numStyle=b.status==='pending'?'background:var(--accent);color:#fff':b.status==='accepted'?'background:#2563c9;color:#fff':'background:#eef1f4;color:#9aa6b2';
+  const qno=(b.status==='pending'||b.status==='accepted')?no:'—';
+  const specBadge=aury?badge('#e8f0ff','#1d4ed8','อายุรกรรม'):badge('#fff1e0','#b45309','ศัลยกรรม');
+  const planBadge=unplan?badge('#fdecec','#c0392b','Unplan ICU'):badge('#e6f4f1','#0f766e','Plan ICU');
+  const oncallBadge=oncall?badge('#fff3df','#b7791f','On call'):'';
+  const statusBadge=badge(sbg,sfg,slbl);
+  const dateLabel=aury?'วันจอง':'วันผ่าตัด', dateText=fmtDate(aury?b.bookingDate:b.surgeryDate);
+  const procRow=b.procedure&&b.procedure.trim()?`<div><span style="color:#9aa6b2">หัตถการ</span> &nbsp;${esc(b.procedure)}</div>`:'';
+  const acceptedBy=b.nurse?('รับจองโดย '+b.nurse):'ยังไม่ระบุผู้รับจอง';
+  const reasonOpts=REASONS.map(r=>`<option value="${esc(r)}"${b.notUsedReason===r?' selected':''}>${esc(r)}</option>`).join('');
+  const reasonOnlyOpts=REASONS.map(r=>`<option value="${esc(r)}"${b.notUsedReason===r?' selected':''}>${esc(r)}</option>`).join('');
+
+  let actionRow='';
+  if (b.status==='pending') {
+    actionRow=`
+      <span style="font-size:12.5px;color:#9aa6b2;font-weight:600">พยาบาลผู้รับจอง</span>
+      <input data-nurse="${b.id}" value="${esc(b.nurse||'')}" placeholder="พิมพ์ชื่อพยาบาลผู้รับจอง" style="padding:8px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:13px;background:#fff;color:#15202b;outline:none;min-width:190px">
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button data-moveup="${b.id}" title="เลื่อนคิวขึ้น" style="width:34px;height:34px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:15px;cursor:pointer">↑</button>
+        <button data-movedown="${b.id}" title="เลื่อนคิวลง" style="width:34px;height:34px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:15px;cursor:pointer">↓</button>
+        <button data-accept="${b.id}" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-size:13.5px;font-weight:700;cursor:pointer">✓ รับจอง ICU</button>
+      </div>`;
+  } else if (b.status==='accepted') {
+    actionRow=`
+      <span style="font-size:12.5px;color:#0f766e;font-weight:700">${esc(acceptedBy)}</span>
+      <span style="width:1px;height:18px;background:#e0e6ec"></span>
+      <span style="font-size:12.5px;color:#9aa6b2;font-weight:600">พยาบาลผู้สรุป</span>
+      <input data-summary="${b.id}" value="${esc(b.summaryNurse||'')}" placeholder="ชื่อพยาบาลผู้สรุป" style="padding:8px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:13px;background:#fff;color:#15202b;outline:none;min-width:150px">
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button data-admit="${b.id}" style="display:inline-flex;align-items:center;gap:6px;padding:9px 17px;border:none;border-radius:9px;background:#0e8a5a;color:#fff;font-size:13.5px;font-weight:700;cursor:pointer">✓ เข้า ICU</button>
+        <select data-reason="${b.id}" style="padding:9px 11px;border:1px solid #f0c9c9;border-radius:9px;font-size:13px;background:#fff;color:#c0392b;outline:none;font-weight:500"><option value="">ไม่ได้เข้า ICU — เลือกเหตุผล</option>${reasonOpts}</select>
+        <button data-revert="${b.id}" style="padding:7px 13px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:12.5px;font-weight:600;cursor:pointer">คืนสู่รอรับจอง</button>
+      </div>`;
+  } else if (b.status==='admitted') {
+    actionRow=`
+      <span style="font-size:12.5px;color:#9aa6b2;font-weight:600">${esc(acceptedBy)}</span>
+      <div style="margin-left:auto;display:flex;gap:11px;align-items:center">
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:9px;background:#e6f7ee;color:#0b7049;font-size:13px;font-weight:700">✓ เข้า ICU แล้ว</span>
+        <button data-revert="${b.id}" style="padding:7px 13px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:12.5px;font-weight:600;cursor:pointer">คืนสู่คิวจอง</button>
+      </div>`;
+  } else if (b.status==='not_used') {
+    actionRow=`
+      <span style="font-size:12.5px;color:#9aa6b2;font-weight:600">ไม่ได้เข้า ICU — เหตุผล</span>
+      <select data-reason="${b.id}" style="padding:8px 11px;border:1px solid #f0c9c9;border-radius:9px;font-size:13px;background:#fdf3f3;color:#c0392b;outline:none;font-weight:600"><option value="">— เลือก —</option>${reasonOnlyOpts}</select>
+      <button data-revert="${b.id}" style="margin-left:auto;padding:7px 13px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:12.5px;font-weight:600;cursor:pointer">คืนสู่คิวจอง</button>`;
+  }
+
+  return `<div style="background:#fff;border:1px solid #e3e8ee;border-radius:15px;padding:18px 20px;box-shadow:0 1px 3px rgba(20,32,43,.04)">
+  <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+    <div style="width:42px;height:42px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;font-family:'IBM Plex Mono',monospace;${numStyle}">${qno}</div>
+    <div style="flex:1;min-width:200px">
+      <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+        <span style="font-size:16.5px;font-weight:700;letter-spacing:-.2px">${esc(b.prefix+' '+b.firstName+' '+b.lastName)}</span>
+        <span style="font-size:12.5px;color:#8693a1;font-family:'IBM Plex Mono',monospace">HN ${esc(b.hn)} · ${b.age} ปี</span>
+      </div>
+      <div style="margin-top:5px;font-size:14px;color:#33414f;font-weight:500">${esc(b.diagnosis)}</div>
+      <div style="margin-top:7px;display:flex;gap:7px;flex-wrap:wrap">${specBadge}${planBadge}${oncallBadge}${statusBadge}</div>
+    </div>
+    <div style="min-width:200px;font-size:13px;color:#5d6b7a;line-height:1.75">
+      <div><span style="color:#9aa6b2">หน่วยงาน</span> &nbsp;${esc(b.ward)}</div>
+      <div><span style="color:#9aa6b2">แพทย์</span> &nbsp;${esc(b.doctor)}</div>
+      <div><span style="color:#9aa6b2">${dateLabel}</span> &nbsp;${dateText} · ${esc(b.time)}</div>
+      ${procRow}
+    </div>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-top:1px dashed #e6ebf0;padding-top:14px;margin-top:14px">
+    ${actionRow}
+  </div>
+</div>`;
+}
+
+function buildQueue() {
+  const bk=state.bookings;
+  const pendCount=bk.filter(b=>b.status==='pending').length;
+  const accCount=bk.filter(b=>b.status==='accepted').length;
+  const admCount=bk.filter(b=>b.status==='admitted').length;
+  const nuCount=bk.filter(b=>b.status==='not_used').length;
+
+  let pend=bk.filter(b=>b.status==='pending');
+  const acc=bk.filter(b=>b.status==='accepted').sort((a,b)=>(a.acceptedAt||a.bookedAt)-(b.acceptedAt||b.bookedAt));
+  const noMap={}; pend.forEach((b,i)=>{noMap[b.id]=i+1;}); acc.forEach((b,i)=>{noMap[b.id]=i+1;});
+
+  const flt=state.queueFilter;
+  let raw;
+  if (flt==='pending') raw=pend;
+  else if (flt==='accepted') raw=acc;
+  else if (flt==='all') raw=[...pend,...acc,...bk.filter(b=>b.status==='admitted'||b.status==='not_used').sort((a,b)=>b.bookedAt-a.bookedAt)];
+  else raw=bk.filter(b=>b.status===flt).sort((a,b)=>b.bookedAt-a.bookedAt);
+
+  const q=state.queueSearch.trim().toLowerCase();
+  if (q) raw=raw.filter(b=>[b.firstName,b.lastName,b.prefix,b.hn,b.diagnosis,b.doctor,b.ward].join(' ').toLowerCase().includes(q));
+
+  const chipsDef=[
+    {key:'pending',label:'รอรับจอง',count:pendCount,color:'#b7791f'},
+    {key:'accepted',label:'คิวจอง (รับจองแล้ว)',count:accCount,color:'var(--accent)'},
+    {key:'admitted',label:'เข้า ICU แล้ว',count:admCount,color:'#0e8a5a'},
+    {key:'not_used',label:'ไม่ได้เข้า ICU',count:nuCount,color:'#c0392b'},
+    {key:'all',label:'ทั้งหมด',count:bk.length,color:'#475569'}
+  ];
+  const chips=chipsDef.map(c=>{
+    const ac=flt===c.key;
+    const cs='display:inline-flex;align-items:center;gap:8px;padding:9px 15px;border-radius:11px;font-size:13.5px;font-weight:600;cursor:pointer;border:1px solid '+(ac?c.color+';background:'+c.color+';color:#fff':' #dce3ea;background:#fff;color:#5d6b7a');
+    const ns='display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:999px;font-size:11.5px;font-weight:700;background:'+(ac?'rgba(255,255,255,.25)':'#eef1f4')+';color:'+(ac?'#fff':'#5d6b7a');
+    return `<button data-filter="${c.key}" style="${cs}"><span>${c.label}</span><span style="${ns}">${c.count}</span></button>`;
+  }).join('');
+
+  const cards=raw.map(b=>buildQueueCard(b,noMap[b.id])).join('');
+  const emptyHtml=raw.length===0?`<div style="background:#fff;border:1px dashed #d6dee6;border-radius:16px;padding:54px 20px;text-align:center;color:#9aa6b2"><div style="font-size:15px;font-weight:600;color:#6b7787">ไม่มีรายการในหมวดนี้</div><div style="font-size:13px;margin-top:4px">เพิ่มการจองใหม่จากหน้าแบบฟอร์มจองเตียง</div></div>`:'';
+
+  return `<div>
+  <div style="margin-bottom:18px"><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">คิวรับจอง ICU</h1><p style="margin:0;font-size:14px;color:#6b7787">รับจองจาก ward → จัดลำดับคิว → สรุปผลว่าเคสได้เข้า ICU หรือไม่</p></div>
+  <div style="position:relative;margin-bottom:16px;max-width:460px">
+    <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9aa6b2;font-size:15px">🔍</span>
+    <input id="queue-search" value="${esc(state.queueSearch)}" placeholder="ค้นหาชื่อคนไข้ / HN / Diagnosis / แพทย์ / หน่วยงาน" style="width:100%;padding:11px 14px 11px 40px;border:1px solid #d6dee6;border-radius:11px;font-size:14px;background:#fff;color:#15202b;outline:none">
+  </div>
+  <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:20px">${chips}</div>
+  ${emptyHtml}
+  <div id="queue-cards" style="display:flex;flex-direction:column;gap:13px">${cards}</div>
+</div>`;
+}
+
+function buildReport() {
+  const bk=state.bookings, mode=state.reportMode, sc=getScope(), md=sc.list;
+  const allMonths=[...new Set(bk.map(b=>b.month))].sort();
+  const monthOpts=allMonths.map(m=>`<option value="${m}"${state.reportMonth===m?' selected':''}>${mLabel(m)}</option>`).join('');
+  const allFY=[...new Set(bk.map(b=>fyOf(b.month)))].sort((a,b)=>a-b);
+  const fyOpts=allFY.map(fy=>`<option value="${fy}"${state.reportFY===String(fy)?' selected':''}>${fyLabel(fy)}</option>`).join('');
+  const modeMonSt=`display:inline-flex;align-items:center;justify-content:center;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:1px solid ${mode==='month'?'var(--accent);background:var(--accent);color:#fff':'#d6dee6;background:#fff;color:#33414f'}`;
+  const modeYrSt=`display:inline-flex;align-items:center;justify-content:center;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:1px solid ${mode==='year'?'var(--accent);background:var(--accent);color:#fff':'#d6dee6;background:#fff;color:#33414f'}`;
+  const selector=mode==='month'?`<div><label style="display:block;font-size:12px;font-weight:600;color:#9aa6b2;margin-bottom:6px">เลือกเดือน</label><select id="rpt-month" style="padding:10px 14px;border:1px solid #d6dee6;border-radius:10px;font-size:14px;font-weight:600;background:#fff;color:#15202b;outline:none;min-width:170px">${monthOpts}</select></div>`:
+    `<div><label style="display:block;font-size:12px;font-weight:600;color:#9aa6b2;margin-bottom:6px">ปีงบประมาณ <span style="font-weight:400">(ต.ค.–ก.ย.)</span></label><select id="rpt-fy" style="padding:10px 14px;border:1px solid #d6dee6;border-radius:10px;font-size:14px;font-weight:600;background:#fff;color:#15202b;outline:none;min-width:190px">${fyOpts}</select></div>`;
+
+  const total=md.length, adm=md.filter(b=>b.status==='admitted').length, nu=md.filter(b=>b.status==='not_used').length;
+  const resolved=adm+nu, util=resolved?Math.round(adm/resolved*100):0;
+  const kpis=[
+    {label:mode==='year'?'จองทั้งปีงบฯ':'จองทั้งเดือน',value:total,sub:'ราย',color:'#15202b'},
+    {label:'เข้า ICU',value:adm,sub:'ราย',color:'#0e8a5a'},
+    {label:'ไม่ได้เข้า ICU',value:nu,sub:'ราย',color:'#c0392b'},
+    {label:'อัตราการใช้เตียง',value:util+'%',sub:'จากที่สรุปผลแล้ว',color:'var(--accent)'}
+  ];
+  const kpiHtml=kpis.map(k=>`<div style="background:#fff;border:1px solid #e3e8ee;border-radius:15px;padding:18px 20px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:12.5px;font-weight:600;color:#8693a1">${k.label}</div><div style="font-size:30px;font-weight:700;letter-spacing:-1px;margin-top:6px;color:${k.color}">${k.value}</div><div style="font-size:12px;color:#9aa6b2;margin-top:2px">${k.sub}</div></div>`).join('');
+
+  let trendMonths;
+  if (mode==='year') trendMonths=allMonths.filter(m=>fyOf(m)===parseInt(state.reportFY)).sort((a,b)=>fyOrder(a)-fyOrder(b));
+  else trendMonths=allMonths;
+  const trendMax=Math.max(1,...trendMonths.map(m=>bk.filter(b=>b.month===m).length));
+  const trendBars=trendMonths.map(m=>{const v=bk.filter(b=>b.month===m).length;const fill=(mode==='month'&&m===state.reportMonth)||(mode==='year')?'var(--accent)':'#c3d0db';return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px"><div style="font-size:13px;font-weight:700;color:#33414f">${v}</div><div style="height:150px;width:100%;display:flex;align-items:flex-end;justify-content:center"><div style="width:100%;max-width:46px;height:${Math.max(5,Math.round(v/trendMax*100))}%;min-height:5px;border-radius:8px 8px 0 0;background:${fill}"></div></div><div style="font-size:11.5px;color:#6b7787;font-weight:500">${mShort(m)}</div></div>`;}).join('');
+
+  const barRow=(b)=>`<div style="display:flex;align-items:center;gap:12px"><div style="width:150px;font-size:12.5px;color:#33414f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.label)}</div><div style="flex:1;height:12px;background:#eef1f4;border-radius:99px;overflow:hidden"><div style="height:100%;width:${b.pct};background:${b.color};border-radius:99px"></div></div><div style="width:28px;text-align:right;font-weight:700;font-size:13px">${b.value}</div></div>`;
+  const barRowW=(b,w)=>`<div style="display:flex;align-items:center;gap:12px"><div style="width:${w}px;font-size:12.5px;color:#33414f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.label)}</div><div style="flex:1;height:12px;background:#eef1f4;border-radius:99px;overflow:hidden"><div style="height:100%;width:${b.pct};background:${b.color};border-radius:99px"></div></div><div style="width:28px;text-align:right;font-weight:700;font-size:13px">${b.value}</div></div>`;
+
+  const wardBars=toBars(countBy(md,b=>b.ward),'var(--accent)').map(b=>barRow(b)).join('');
+  const diagBars=toBars(countBy(md,b=>b.diagnosis),'#1d6fb8').slice(0,7).map(b=>barRowW(b,160)).join('');
+  const doctorBars=toBars(countBy(md,b=>b.doctor),'#5b53c9').slice(0,7).map(b=>barRowW(b,130)).join('');
+  const reasonBars=toBars(countBy(md.filter(b=>b.status==='not_used'),b=>b.notUsedReason),'#c0392b');
+
+  const auryCount=md.filter(b=>b.specialty==='อายุรกรรม').length, surgCount=md.filter(b=>b.specialty==='ศัลยกรรม').length;
+  const specTotal=auryCount+surgCount, auryPct=specTotal?Math.round(auryCount/specTotal*100):0, surgPct=specTotal?100-auryPct:0;
+  const donutStyle=specTotal?`conic-gradient(#1d6fb8 0 ${auryPct}%, #d97706 ${auryPct}% 100%)`:'#eef1f4';
+
+  const dataSection=total>0?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:18px">
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">จำนวนผู้ป่วยแยกตามหน่วยงาน</div><div style="display:flex;flex-direction:column;gap:12px">${wardBars}</div></div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">แยกตามสาขา (อายุรกรรม / ศัลยกรรม)</div><div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap"><div style="width:128px;height:128px;border-radius:50%;background:${donutStyle};position:relative;flex:none"><div style="position:absolute;inset:19px;background:#fff;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:24px;font-weight:700;line-height:1">${specTotal}</div><div style="font-size:11px;color:#9aa6b2">ราย</div></div></div><div style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:14px"><div><div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:3px;background:#1d6fb8;flex:none"></span><span style="font-size:13.5px;font-weight:600">อายุรกรรม</span></div><div style="font-size:13px;color:#6b7787;margin-left:20px">${auryCount} ราย · ${auryPct}%</div></div><div><div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:3px;background:#d97706;flex:none"></span><span style="font-size:13.5px;font-weight:600">ศัลยกรรม</span></div><div style="font-size:13px;color:#6b7787;margin-left:20px">${surgCount} ราย · ${surgPct}%</div></div></div></div></div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">Diagnosis ที่พบบ่อย</div><div style="display:flex;flex-direction:column;gap:12px">${diagBars}</div></div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">สถิติแพทย์เจ้าของไข้</div><div style="display:flex;flex-direction:column;gap:12px">${doctorBars}</div></div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:4px">เหตุผลที่ไม่ได้เข้า ICU</div><div style="font-size:12.5px;color:#9aa6b2;margin-bottom:18px">รวม ${nu} ราย</div>${reasonBars.length>0?`<div style="display:flex;flex-direction:column;gap:12px">${reasonBars.map(b=>barRowW(b,130)).join('')}</div>`:'<div style="font-size:13px;color:#9aa6b2">ทุกการจองในช่วงนี้ได้เข้า ICU ครบ</div>'}</div>
+  </div>`:`<div style="background:#fff;border:1px dashed #d6dee6;border-radius:16px;padding:54px 20px;text-align:center;color:#9aa6b2"><div style="font-size:15px;font-weight:600;color:#6b7787">ยังไม่มีข้อมูลในช่วงนี้</div></div>`;
+
+  const subtitle=mode==='year'?'สรุปสถิติรายปีงบประมาณ (ต.ค.–ก.ย.)':'สรุปสถิติการจองเตียง ICU รายเดือน';
+  const trendTitle=mode==='year'?'จำนวนการจองรายเดือนในปีงบประมาณ':'จำนวนการจองรายเดือน';
+  return `<div>
+  <div style="margin-bottom:20px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">ICU Report Dashboard</h1><p style="margin:0;font-size:14px;color:#6b7787">${subtitle}</p></div>
+      <div style="display:flex;gap:6px">
+        <button id="btn-word" style="display:inline-flex;align-items:center;gap:7px;padding:10px 16px;border:1px solid #d6dee6;border-radius:10px;background:#fff;color:#2b579a;font-size:13.5px;font-weight:700;cursor:pointer">⬇ Word</button>
+        <button id="btn-excel" style="display:inline-flex;align-items:center;gap:7px;padding:10px 16px;border:1px solid #d6dee6;border-radius:10px;background:#fff;color:#1d7044;font-size:13.5px;font-weight:700;cursor:pointer">⬇ Excel</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;margin-top:16px">
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:#9aa6b2;margin-bottom:6px">มุมมอง</label>
+        <div style="display:flex;gap:7px">
+          <button data-mode="month" style="${modeMonSt}">รายเดือน</button>
+          <button data-mode="year" style="${modeYrSt}">รายปีงบประมาณ</button>
+        </div>
+      </div>
+      ${selector}
+      <div style="font-size:12.5px;color:#9aa6b2;padding-bottom:11px">ช่วง: ${esc(sc.periodText)}</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:18px">${kpiHtml}</div>
+  <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04);margin-bottom:18px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px">${trendTitle}</div>
+    <div style="font-size:12.5px;color:#9aa6b2;margin-bottom:18px">เปรียบเทียบจำนวนการจองเตียง ICU แยกรายเดือน</div>
+    <div style="display:flex;align-items:flex-end;gap:16px">${trendBars}</div>
+  </div>
+  ${dataSection}
+</div>`;
+}
+
+function buildToast() {
+  if (!state.toast) return '';
+  return `<div style="position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:60;background:#15202b;color:#fff;padding:13px 22px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:toastIn .3s ease both;display:flex;align-items:center;gap:10px"><span style="width:8px;height:8px;border-radius:50%;background:#34d399"></span>${esc(state.toast)}</div>`;
+}
+
+function buildApp() {
+  let screen='';
+  if (state.screen==='book') screen=buildBook();
+  else if (state.screen==='queue') screen=buildQueue();
+  else if (state.screen==='report') screen=buildReport();
+  return buildNav()+`<div style="max-width:1200px;margin:0 auto;padding:26px 22px 72px">${screen}</div>`+buildToast();
+}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+function render() {
+  document.getElementById('app').innerHTML = buildApp();
+  bindEvents();
+}
+
+// ─── EVENT BINDING ───────────────────────────────────────────────────────────
+function bindEvents() {
+  const app=document.getElementById('app');
+
+  // Nav tabs
+  app.querySelectorAll('[data-nav]').forEach(btn=>btn.addEventListener('click',()=>{ state.screen=btn.dataset.nav; render(); }));
+
+  // Segmented / pick buttons
+  app.querySelectorAll('[data-pick]').forEach(btn=>btn.addEventListener('click',()=>{
+    const {pick:field,val}=btn.dataset;
+    state.form={...state.form,[field]:val};
+    state.formError='';
+    render();
+  }));
+
+  // Form selects/inputs
+  const fldMap={ward:'ward',doctor:'doctor',hn:'hn',firstName:'firstName',lastName:'lastName',age:'age',diagnosis:'diagnosis',procedure:'procedure',time:'time',surgeryDate:'surgeryDate',bookingDate:'bookingDate'};
+  Object.keys(fldMap).forEach(name=>{
+    const el=app.querySelector(`[name="${name}"]`);
+    if (el) el.addEventListener('change',e=>{ state.form={...state.form,[fldMap[name]]:e.target.value}; state.formError=''; });
+  });
+
+  // Submit / reset
+  const sub=app.querySelector('#btn-submit');
+  if (sub) sub.addEventListener('click',handleSubmit);
+  const rst=app.querySelector('#btn-reset');
+  if (rst) rst.addEventListener('click',()=>{ state.form=blankForm(); state.formError=''; render(); });
+
+  // Queue search (live, partial re-render)
+  const qs=app.querySelector('#queue-search');
+  if (qs) {
+    qs.addEventListener('input',e=>{
+      state.queueSearch=e.target.value;
+      const cards=document.getElementById('queue-cards');
+      if (cards) {
+        const bk=state.bookings;
+        let pend=bk.filter(b=>b.status==='pending');
+        const acc=bk.filter(b=>b.status==='accepted').sort((a,b)=>(a.acceptedAt||a.bookedAt)-(b.acceptedAt||b.bookedAt));
+        const noMap={}; pend.forEach((b,i)=>{noMap[b.id]=i+1;}); acc.forEach((b,i)=>{noMap[b.id]=i+1;});
+        const flt=state.queueFilter;
+        let raw;
+        if (flt==='pending') raw=pend;
+        else if (flt==='accepted') raw=acc;
+        else if (flt==='all') raw=[...pend,...acc,...bk.filter(b=>b.status==='admitted'||b.status==='not_used').sort((a,b)=>b.bookedAt-a.bookedAt)];
+        else raw=bk.filter(b=>b.status===flt).sort((a,b)=>b.bookedAt-a.bookedAt);
+        const q=state.queueSearch.trim().toLowerCase();
+        if (q) raw=raw.filter(b=>[b.firstName,b.lastName,b.prefix,b.hn,b.diagnosis,b.doctor,b.ward].join(' ').toLowerCase().includes(q));
+        cards.innerHTML=raw.map(b=>buildQueueCard(b,noMap[b.id])).join('');
+        bindQueueCardEvents();
+      }
+    });
+  }
+
+  // Queue filter chips
+  app.querySelectorAll('[data-filter]').forEach(btn=>btn.addEventListener('click',()=>{ state.queueFilter=btn.dataset.filter; render(); }));
+
+  // Queue card events
+  bindQueueCardEvents();
+
+  // Report controls
+  const rptMonth=app.querySelector('#rpt-month');
+  if (rptMonth) rptMonth.addEventListener('change',e=>{ state.reportMonth=e.target.value; render(); });
+  const rptFY=app.querySelector('#rpt-fy');
+  if (rptFY) rptFY.addEventListener('change',e=>{ state.reportFY=e.target.value; render(); });
+  app.querySelectorAll('[data-mode]').forEach(btn=>btn.addEventListener('click',()=>{ state.reportMode=btn.dataset.mode; render(); }));
+
+  // Export
+  const bw=app.querySelector('#btn-word');
+  if (bw) bw.addEventListener('click',()=>{ doDownload('ICU-report-'+getScope().fileTag+'.doc','application/msword'); state.toast='ส่งออกไฟล์ Word เรียบร้อย'; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{state.toast='';render();},3200); render(); });
+  const be=app.querySelector('#btn-excel');
+  if (be) be.addEventListener('click',()=>{ doDownload('ICU-report-'+getScope().fileTag+'.xls','application/vnd.ms-excel'); state.toast='ส่งออกไฟล์ Excel เรียบร้อย'; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{state.toast='';render();},3200); render(); });
+}
+
+function bindQueueCardEvents() {
+  const app=document.getElementById('app');
+
+  // Nurse inputs — update in place without re-render
+  app.querySelectorAll('[data-nurse]').forEach(inp=>inp.addEventListener('input',e=>{
+    const id=e.currentTarget.dataset.nurse;
+    updateBooking(id,{nurse:e.target.value});
+  }));
+  app.querySelectorAll('[data-summary]').forEach(inp=>inp.addEventListener('input',e=>{
+    const id=e.currentTarget.dataset.summary;
+    updateBooking(id,{summaryNurse:e.target.value});
+  }));
+
+  // Accept
+  app.querySelectorAll('[data-accept]').forEach(btn=>btn.addEventListener('click',e=>{
+    const id=e.currentTarget.dataset.accept;
+    updateBooking(id,{status:'accepted',acceptedAt:Date.now()});
+    state.toast='รับจองเรียบร้อย — แจ้ง ward ว่า ICU รับจองแล้ว';
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>{state.toast='';render();},3200);
+    render();
+  }));
+
+  // Admit
+  app.querySelectorAll('[data-admit]').forEach(btn=>btn.addEventListener('click',e=>{
+    const id=e.currentTarget.dataset.admit;
+    updateBooking(id,{status:'admitted',notUsedReason:''});
+    state.toast='สรุปผล: เคสนี้ได้เข้า ICU';
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>{state.toast='';render();},3200);
+    render();
+  }));
+
+  // Reason (not_used)
+  app.querySelectorAll('[data-reason]').forEach(sel=>sel.addEventListener('change',e=>{
+    const v=e.target.value; if (!v) return;
+    const id=e.currentTarget.dataset.reason;
+    updateBooking(id,{status:'not_used',notUsedReason:v});
+    state.toast='สรุปผล: ไม่ได้เข้า ICU ('+v+')';
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>{state.toast='';render();},3200);
+    render();
+  }));
+
+  // Revert
+  app.querySelectorAll('[data-revert]').forEach(btn=>btn.addEventListener('click',e=>{
+    const id=e.currentTarget.dataset.revert;
+    const b=state.bookings.find(x=>String(x.id)===String(id));
+    if (!b) return;
+    const to=(b.status==='admitted'||b.status==='not_used')?'accepted':'pending';
+    updateBooking(id,{status:to,notUsedReason:''});
+    render();
+  }));
+
+  // Move up/down
+  app.querySelectorAll('[data-moveup]').forEach(btn=>btn.addEventListener('click',e=>{ moveQueue(e.currentTarget.dataset.moveup,-1); }));
+  app.querySelectorAll('[data-movedown]').forEach(btn=>btn.addEventListener('click',e=>{ moveQueue(e.currentTarget.dataset.movedown,1); }));
+}
+
+// ─── HANDLERS ────────────────────────────────────────────────────────────────
+function updateBooking(id, patch) {
+  state.bookings=state.bookings.map(b=>String(b.id)===String(id)?{...b,...patch}:b);
+  persist();
+}
+
+function moveQueue(id, dir) {
+  const arr=[...state.bookings];
+  const pend=arr.map((b,idx)=>({b,idx})).filter(x=>x.b.status==='pending');
+  const pi=pend.findIndex(x=>String(x.b.id)===String(id));
+  const tj=pi+dir;
+  if (pi<0||tj<0||tj>=pend.length) return;
+  const a=pend[pi].idx, c=pend[tj].idx;
+  [arr[a],arr[c]]=[arr[c],arr[a]];
+  state.bookings=arr;
+  persist();
+  render();
+}
+
+function handleSubmit() {
+  const f=state.form;
+  const req=[['ward','หน่วยงาน'],['doctor','แพทย์เจ้าของไข้'],['hn','HN'],['prefix','คำนำหน้า'],['firstName','ชื่อ'],['lastName','สกุล'],['age','อายุ'],['diagnosis','Diagnosis'],['specialty','สาขา'],['time','เวลา'],['planType','Plan/Unplan']];
+  const miss=req.filter(r=>!String(f[r[0]]||'').trim()).map(r=>r[1]);
+  if (miss.length) { state.formError='กรุณากรอก: '+miss.join(', '); render(); return; }
+  const now=Date.now();
+  state.bookings=[...state.bookings,{...f,id:now,status:'pending',notUsedReason:'',nurse:'',summaryNurse:'',month:CUR,bookedAt:now,acceptedAt:0}];
+  persist();
+  state.form=blankForm();
+  state.formError='';
+  state.screen='queue';
+  state.queueFilter='pending';
+  state.toast='บันทึกการจองเรียบร้อย — เพิ่มเข้าคิว ICU แล้ว';
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>{state.toast='';render();},3200);
+  render();
+}
+
+function reportHTML() {
+  const sc=getScope(), list=sc.list, total=list.length;
+  const adm=list.filter(b=>b.status==='admitted').length, nu=list.filter(b=>b.status==='not_used').length, pend=list.filter(b=>b.status==='pending').length, accpt=list.filter(b=>b.status==='accepted').length;
+  const util=(adm+nu)?Math.round(adm/(adm+nu)*100):0;
+  const aury=list.filter(b=>b.specialty==='อายุรกรรม').length, surg=list.filter(b=>b.specialty==='ศัลยกรรม').length;
+  const now=new Date();
+  const tbl=(title,head,rows)=>'<h3>'+title+'</h3><table>'+(head?'<thead><tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead>':'')+'<tbody>'+rows+'</tbody></table>';
+  const sortKV=(fn,src)=>{ const m=countBy(src||list,fn); return Object.keys(m).map(k=>({k,v:m[k]})).sort((a,b)=>b.v-a.v); };
+  const kv=(arr)=>arr.map(x=>'<tr><td>'+x.k+'</td><td style="text-align:center">'+x.v+'</td></tr>').join('');
+  const statusTh={pending:'รอรับจอง',accepted:'รับจองแล้ว',admitted:'เข้า ICU แล้ว',not_used:'ไม่ได้เข้า ICU'};
+  const summary='<tr><td>จำนวนการจองทั้งหมด</td><td style="text-align:center">'+total+'</td></tr><tr><td>เข้า ICU</td><td style="text-align:center">'+adm+'</td></tr><tr><td>ไม่ได้เข้า ICU</td><td style="text-align:center">'+nu+'</td></tr><tr><td>รับจองแล้ว (รอสรุปผล)</td><td style="text-align:center">'+accpt+'</td></tr><tr><td>รอรับจอง</td><td style="text-align:center">'+pend+'</td></tr><tr><td>อัตราการเข้า ICU</td><td style="text-align:center">'+util+'%</td></tr>';
+  const specRows='<tr><td>อายุรกรรม</td><td style="text-align:center">'+aury+'</td></tr><tr><td>ศัลยกรรม</td><td style="text-align:center">'+surg+'</td></tr>';
+  const detailHead=['ลำดับ','HN','ชื่อ-สกุล','อายุ','หน่วยงาน','แพทย์เจ้าของไข้','Diagnosis','สาขา','Plan/Unplan','วันที่','เวลา','สถานะ','พยาบาลผู้รับจอง','พยาบาลผู้สรุป','เหตุผลไม่ได้เข้า ICU'];
+  const detail=list.slice().sort((a,b)=>a.bookedAt-b.bookedAt).map((b,i)=>'<tr>'+[i+1,b.hn,(b.prefix+' '+b.firstName+' '+b.lastName),b.age,b.ward,b.doctor,b.diagnosis,b.specialty,(b.planType==='unplan icu'?'Unplan':'Plan'),fmtFull(b),b.time,statusTh[b.status]||b.status,b.nurse||'',b.summaryNurse||'',b.notUsedReason||''].map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('');
+  return '<html><head><meta charset="utf-8"><style>body{font-family:Tahoma,"TH Sarabun New",sans-serif;color:#222;padding:18px}h1{font-size:20px;margin:0 0 4px}h3{font-size:15px;margin:20px 0 4px}p{color:#555;font-size:13px;margin:2px 0}table{border-collapse:collapse;margin-top:6px;width:100%}th,td{border:1px solid #999;padding:5px 8px;font-size:12.5px;text-align:left}th{background:#e8eef3}</style></head><body>'+
+    '<h1>รายงานการจองเตียง ICU — โรงพยาบาลสมเด็จพระยุพราชเดชอุดม</h1>'+
+    '<p>ช่วงเวลา: '+sc.periodText+'</p>'+
+    '<p>ออกรายงานเมื่อ: '+now.toLocaleDateString('th-TH')+' '+now.toLocaleTimeString('th-TH')+'</p>'+
+    tbl('สรุปภาพรวม',['รายการ','จำนวน'],summary)+
+    tbl('จำนวนผู้ป่วยแยกตามหน่วยงาน',['หน่วยงาน','จำนวน'],kv(sortKV(b=>b.ward)))+
+    tbl('แยกตามสาขา',['สาขา','จำนวน'],specRows)+
+    tbl('Diagnosis ที่พบบ่อย',['Diagnosis','จำนวน'],kv(sortKV(b=>b.diagnosis)))+
+    tbl('สถิติแพทย์เจ้าของไข้',['แพทย์','จำนวน'],kv(sortKV(b=>b.doctor)))+
+    tbl('เหตุผลที่ไม่ได้เข้า ICU',['เหตุผล','จำนวน'],kv(sortKV(b=>b.notUsedReason,list.filter(b=>b.status==='not_used'))))+
+    tbl('รายละเอียดผู้ป่วยที่จอง',detailHead,detail)+
+    '</body></html>';
+}
+
+function doDownload(name, mime) {
+  const blob=new Blob(['﻿'+reportHTML()],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+(function init() {
+  let data=loadData();
+  if (!data||!data.length) { data=seed(); localStorage.setItem(KEY,JSON.stringify(data)); }
+  state.bookings=data;
+  render();
+})();
+</script>
+</body>
+</html>
