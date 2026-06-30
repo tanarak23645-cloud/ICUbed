@@ -7,8 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{min-height:100vh;background:#eef1f4;font-family:'IBM Plex Sans Thai','IBM Plex Sans',system-ui,sans-serif;color:#15202b;-webkit-font-smoothing:antialiased}
@@ -34,8 +33,10 @@ const firebaseConfig = {
   messagingSenderId: "1078223906292",
   appId: "1:1078223906292:web:c30aecba4672a3b83685a1"
 };
+
+let db;
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+setTimeout(() => { db = firebase.firestore(); setupRealtimeListener(); }, 100);
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const KEY = 'icu_booking_dechudom_v2';
@@ -661,16 +662,24 @@ function doDownload(name, mime) {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 (async function init() {
   render(); // Show loading state
-  let data=await loadData();
-  if (!data||!data.length) {
-    data=seed();
-    state.bookings=data;
-    await persist();
-  } else {
-    state.bookings=data;
+  // Wait for Firebase to be ready
+  await new Promise(r => setTimeout(r, 500));
+  try {
+    let data=await loadData();
+    if (!data||!data.length) {
+      data=seed();
+      state.bookings=data;
+      await persist();
+    } else {
+      state.bookings=data;
+    }
+    render();
+  } catch(e) {
+    console.error('Init error:', e);
+    // Fallback: use seed data if Firestore fails
+    state.bookings=seed();
+    render();
   }
-  setupRealtimeListener();
-  render();
 })();
 </script>
 </body>
