@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -8,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{min-height:100vh;background:#eef1f4;font-family:'IBM Plex Sans Thai','IBM Plex Sans',system-ui,sans-serif;color:#15202b;-webkit-font-smoothing:antialiased}
@@ -732,11 +734,72 @@ function reportHTML() {
     '</body></html>';
 }
 
+function reportExcel() {
+  const sc=getScope(), list=sc.list;
+  const adm=list.filter(b=>b.status==='admitted').length, nu=list.filter(b=>b.status==='not_used').length;
+  const util=(adm+nu)?Math.round(adm/(adm+nu)*100):0;
+  const aury=list.filter(b=>b.specialty==='อายุรกรรม').length, surg=list.filter(b=>b.specialty==='ศัลยกรรม').length;
+
+  const wsData=[];
+  wsData.push(['รายงานการจองเตียง ICU — โรงพยาบาลสมเด็จพระยุพราชเดชอุดม']);
+  wsData.push(['ช่วงเวลา: '+sc.periodText]);
+  wsData.push(['ออกรายงาน: '+(new Date()).toLocaleDateString('th-TH')]);
+  wsData.push([]);
+
+  wsData.push(['สรุปภาพรวม']);
+  wsData.push(['จำนวนการจองทั้งหมด',list.length]);
+  wsData.push(['เข้า ICU',adm]);
+  wsData.push(['ไม่ได้เข้า ICU',nu]);
+  wsData.push(['อัตราการเข้า ICU',util+'%']);
+  wsData.push([]);
+
+  wsData.push(['จำนวนผู้ป่วยแยกตามหน่วยงาน']);
+  wsData.push(['หน่วยงาน','จำนวน']);
+  const wardMap=countBy(list,b=>b.ward);
+  Object.keys(wardMap).sort((a,b)=>wardMap[b]-wardMap[a]).forEach(w=>{wsData.push([w,wardMap[w]]);});
+  wsData.push([]);
+
+  wsData.push(['แยกตามสาขา']);
+  wsData.push(['สาขา','จำนวน']);
+  wsData.push(['อายุรกรรม',aury]);
+  wsData.push(['ศัลยกรรม',surg]);
+  wsData.push([]);
+
+  wsData.push(['Diagnosis ที่พบบ่อย']);
+  wsData.push(['Diagnosis','จำนวน']);
+  const diagMap=countBy(list,b=>b.diagnosis);
+  Object.keys(diagMap).sort((a,b)=>diagMap[b]-diagMap[a]).slice(0,10).forEach(d=>{wsData.push([d,diagMap[d]]);});
+  wsData.push([]);
+
+  wsData.push(['สถิติแพทย์เจ้าของไข้']);
+  wsData.push(['แพทย์','จำนวน']);
+  const docMap=countBy(list,b=>b.doctor);
+  Object.keys(docMap).sort((a,b)=>docMap[b]-docMap[a]).slice(0,10).forEach(d=>{wsData.push([d,docMap[d]]);});
+  wsData.push([]);
+
+  wsData.push(['รายละเอียดผู้ป่วยที่จอง']);
+  wsData.push(['ลำดับ','HN','ชื่อ-สกุล','อายุ','หน่วยงาน','แพทย์','Diagnosis','สาขา','Plan/Unplan','วันที่','เวลา','สถานะ']);
+  list.slice().sort((a,b)=>a.bookedAt-b.bookedAt).forEach((b,i)=>{
+    const statusTh={pending:'รอรับจอง',accepted:'รับจองแล้ว',admitted:'เข้า ICU',not_used:'ไม่ได้เข้า ICU'};
+    wsData.push([i+1,b.hn,b.prefix+' '+b.firstName+' '+b.lastName,b.age,b.ward,b.doctor,b.diagnosis,b.specialty,b.planType==='unplan icu'?'Unplan':'Plan',fmtFull(b),b.time,statusTh[b.status]||b.status]);
+  });
+
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=[{wch:8},{wch:12},{wch:20},{wch:8},{wch:18},{wch:15},{wch:25},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Report');
+  XLSX.writeFile(wb, getScope().fileTag+'.xlsx');
+}
+
 function doDownload(name, mime) {
-  const blob=new Blob(['﻿'+reportHTML()],{type:mime});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),3000);
+  if (mime==='application/vnd.ms-excel') {
+    reportExcel();
+  } else {
+    const blob=new Blob(['﻿'+reportHTML()],{type:'application/msword;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  }
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
