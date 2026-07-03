@@ -57,11 +57,15 @@ const PROCS = ["Exploratory laparotomy","Appendectomy","ORIF","Craniotomy","Bowe
 const THM = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
+let ADMIN_PW = 'icu1234'; // Default — change after first login via admin panel
+
 let state = {
   screen: 'book',
   bookings: [],
   doctors: [],
   adminNewDoctor: '',
+  adminAuthed: sessionStorage.getItem('icu_admin_auth')==='1',
+  adminPwError: '',
   form: blankForm(),
   queueFilter: 'pending',
   queueSearch: '',
@@ -111,6 +115,11 @@ function setupRealtimeListener() {
     state.doctors = DOCTORS;
     render();
   }, err => console.error('Doctors listener error:', err));
+
+  db.collection('settings').doc('admin').onSnapshot(doc => {
+    if (doc.exists && doc.data().password) ADMIN_PW = doc.data().password;
+    else db.collection('settings').doc('admin').set({ password: ADMIN_PW });
+  }, err => console.error('Settings listener error:', err));
 }
 
 async function addDoctor(name) {
@@ -486,6 +495,19 @@ function buildReport() {
 }
 
 function buildAdmin() {
+  if (!state.adminAuthed) {
+    const errHtml = state.adminPwError ? `<div style="margin-top:12px;color:#c0392b;font-size:13px;font-weight:600">${esc(state.adminPwError)}</div>` : '';
+    return `<div style="display:flex;justify-content:center;padding-top:48px">
+      <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:36px 40px;box-shadow:0 1px 3px rgba(20,32,43,.04);width:100%;max-width:400px;text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">🔒</div>
+        <h1 style="margin:0 0 6px;font-size:20px;font-weight:700">Admin Panel</h1>
+        <p style="margin:0 0 22px;font-size:13.5px;color:#6b7787">กรุณาใส่รหัสผ่านเพื่อเข้าจัดการระบบ</p>
+        <input id="admin-pw-input" type="password" placeholder="รหัสผ่าน" onkeydown="if(event.key==='Enter')checkAdminPw()" style="width:100%;padding:12px 14px;border:1px solid #d6dee6;border-radius:9px;font-size:15px;text-align:center;background:#fff;color:#15202b;outline:none">
+        ${errHtml}
+        <button onclick="checkAdminPw()" style="width:100%;margin-top:14px;padding:12px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-size:14.5px;font-weight:700;cursor:pointer">เข้าสู่ระบบ</button>
+      </div>
+    </div>`;
+  }
   const doctors = state.doctors || [];
   const docRows = doctors.map((d, i) => {
     const docId = 'doc_' + i;
@@ -496,7 +518,7 @@ function buildAdmin() {
   }).join('');
 
   return `<div>
-    <div style="margin-bottom:22px"><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">⚙️ Admin Panel</h1><p style="margin:0;font-size:14px;color:#6b7787">จัดการรายชื่อแพทย์</p></div>
+    <div style="margin-bottom:22px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">⚙️ Admin Panel</h1><p style="margin:0;font-size:14px;color:#6b7787">จัดการรายชื่อแพทย์และระบบ</p></div><button onclick="adminLogout()" style="padding:9px 16px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:13px;font-weight:600;cursor:pointer">🔓 ออกจากระบบ</button></div>
     <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04)">
       <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:18px">เพิ่มแพทย์ใหม่</div>
       <div style="display:flex;gap:10px;margin-bottom:20px">
@@ -505,6 +527,14 @@ function buildAdmin() {
       </div>
       <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:12px">รายชื่อแพทย์ (${doctors.length})</div>
       ${docRows}
+    </div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04);margin-top:18px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:14px">🔑 เปลี่ยนรหัสผ่าน Admin</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input id="pw-current" type="password" placeholder="รหัสผ่านเดิม" style="flex:1;min-width:160px;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none">
+        <input id="pw-new" type="password" placeholder="รหัสผ่านใหม่ (อย่างน้อย 4 ตัว)" style="flex:1;min-width:160px;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none">
+        <button onclick="changeAdminPw()" style="padding:11px 22px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer">บันทึก</button>
+      </div>
     </div>
     <div style="background:#fff;border:1px solid #f3c9c9;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04);margin-top:18px">
       <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:#c0392b;text-transform:uppercase;margin-bottom:10px">⚠️ Danger Zone</div>
@@ -530,6 +560,47 @@ async function clearAllBookings() {
     render();
   } catch(e) {
     console.error('Clear error:', e);
+    alert('เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
+
+function checkAdminPw() {
+  const inp = document.getElementById('admin-pw-input');
+  if (inp && inp.value === ADMIN_PW) {
+    state.adminAuthed = true;
+    state.adminPwError = '';
+    sessionStorage.setItem('icu_admin_auth', '1');
+    render();
+  } else {
+    state.adminPwError = 'รหัสผ่านไม่ถูกต้อง';
+    render();
+    const el = document.getElementById('admin-pw-input');
+    if (el) el.focus();
+  }
+}
+
+function adminLogout() {
+  state.adminAuthed = false;
+  sessionStorage.removeItem('icu_admin_auth');
+  state.screen = 'book';
+  render();
+}
+
+async function changeAdminPw() {
+  const cur = document.getElementById('pw-current');
+  const nw = document.getElementById('pw-new');
+  if (!cur || !nw) return;
+  if (cur.value !== ADMIN_PW) { alert('รหัสผ่านเดิมไม่ถูกต้อง'); return; }
+  const newPw = nw.value.trim();
+  if (newPw.length < 4) { alert('รหัสผ่านใหม่ต้องมีอย่างน้อย 4 ตัวอักษร'); return; }
+  try {
+    await db.collection('settings').doc('admin').set({ password: newPw });
+    ADMIN_PW = newPw;
+    state.toast = 'เปลี่ยนรหัสผ่านเรียบร้อย';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { state.toast = ''; render(); }, 3200);
+    render();
+  } catch(e) {
     alert('เกิดข้อผิดพลาด: ' + e.message);
   }
 }
