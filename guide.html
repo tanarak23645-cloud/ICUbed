@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="คู่มือใช้งานระบบจองเตียง ICU รพ.สมเด็จพระยุพราชเดชอุดม สำหรับหอผู้ป่วย">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
+<title>คู่มือใช้งานระบบจองเตียง ICU</title>
+<style>
+  :root{
+    --paper:#f5f1e8;
+    --paper-raise:#fbf9f4;
+    --ink:#142b31;
+    --ink-soft:#4a5d63;
+    --teal:#0f7b8a;
+    --teal-deep:#0a4a54;
+    --teal-tint:#e2eeef;
+    --amber:#b8721f;
+    --amber-tint:#f7ecdb;
+    --sage:#3f7a5c;
+    --sage-tint:#e4efe8;
+    --clay:#b0433a;
+    --clay-tint:#f6e3e1;
+    --line:#d9d1bf;
+    --line-soft:#e6e0d2;
+    --shadow:0 18px 40px -22px rgba(20,43,49,.35);
+    --font-body:"Sarabun","Noto Sans Thai","IBM Plex Sans Thai","Leelawadee UI","Segoe UI",sans-serif;
+    --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  :root[data-theme="dark"]{
+    --paper:#0f2226; --paper-raise:#132a2f; --ink:#eef2ee; --ink-soft:#a9bcbf;
+    --teal:#4bb6c2; --teal-deep:#0c3037; --teal-tint:#173c41;
+    --amber:#e0a55a; --amber-tint:#3a2c17; --sage:#7ec49f; --sage-tint:#1c3227;
+    --clay:#e08277; --clay-tint:#3a1c1a; --line:#294247; --line-soft:#1d3438;
+    --shadow:0 18px 44px -20px rgba(0,0,0,.55);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#0f2226; --paper-raise:#132a2f; --ink:#eef2ee; --ink-soft:#a9bcbf;
+      --teal:#4bb6c2; --teal-deep:#0c3037; --teal-tint:#173c41;
+      --amber:#e0a55a; --amber-tint:#3a2c17; --sage:#7ec49f; --sage-tint:#1c3227;
+      --clay:#e08277; --clay-tint:#3a1c1a; --line:#294247; --line-soft:#1d3438;
+      --shadow:0 18px 44px -20px rgba(0,0,0,.55);
+    }
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);-webkit-font-smoothing:antialiased;padding:40px 20px 64px}
+  .wrap{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:34px}
+
+  .sheet{background:var(--paper-raise);border:1px solid var(--line-soft);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}
+  .band{background:var(--teal-deep);color:#f3f7f5;padding:26px 36px 24px;display:flex;flex-direction:column;gap:6px}
+  .band .hosp{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#a9d3d6;font-weight:600}
+  .band h1{margin:2px 0 0;font-size:clamp(22px,3.2vw,29px);font-weight:800;letter-spacing:-.3px;text-wrap:balance}
+  .band p{margin:0;font-size:14px;color:#cfe4e3;font-weight:500}
+
+  .body-pad{padding:34px 36px 40px}
+
+  /* QR + entry block */
+  .entry{display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin-bottom:16px}
+  .qr-card{background:#fff;border-radius:14px;padding:14px;width:164px;height:164px;box-shadow:0 6px 18px -10px rgba(20,43,49,.4)}
+  .qr-card svg{width:100%;height:100%;display:block}
+  .entry-info .kick{font-family:var(--font-mono);font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--teal);margin-bottom:6px}
+  .entry-info h2{margin:0 0 8px;font-size:20px;font-weight:800;letter-spacing:-.2px}
+  .entry-info p{margin:0 0 12px;font-size:14px;line-height:1.65;color:var(--ink-soft);max-width:44ch}
+  .entry-info .url{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--teal-deep);background:var(--teal-tint);border-radius:8px;padding:8px 12px;text-decoration:none;word-break:break-all}
+  :root[data-theme="dark"] .entry-info .url{color:var(--teal)}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .entry-info .url{color:var(--teal)}}
+
+  /* Call reminder banner */
+  .call{display:flex;align-items:center;gap:18px;background:var(--clay-tint);border:1.5px solid var(--clay);border-radius:16px;padding:18px 24px;margin-bottom:34px}
+  .call .ic{flex:none;width:46px;height:46px;border-radius:50%;background:var(--clay);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px}
+  .call .txt{flex:1;min-width:0}
+  .call .txt b{display:block;font-size:15px;font-weight:800;color:var(--clay);margin-bottom:2px}
+  :root[data-theme="dark"] .call .txt b{color:var(--clay)}
+  .call .txt span{font-size:13.5px;line-height:1.55;color:var(--ink-soft)}
+  .call .nums{display:flex;gap:10px;flex:none}
+  .call .num{font-family:var(--font-mono);font-weight:800;font-size:22px;color:var(--clay);background:var(--paper-raise);border:1px solid var(--clay);border-radius:10px;padding:8px 16px;line-height:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .call .num small{font-family:var(--font-body);font-size:9.5px;font-weight:600;color:var(--ink-soft);letter-spacing:.04em}
+
+  /* Steps */
+  .step{position:relative;display:flex;gap:22px}
+  .step + .step{margin-top:8px}
+  .badge{flex:none;width:52px;height:52px;border-radius:50%;background:var(--teal-deep);color:#eef7f6;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:21px;font-weight:700;position:relative;z-index:2}
+  .spine{position:absolute;left:25px;top:52px;bottom:-16px;width:2px;background:var(--line);z-index:1}
+  .step:last-child .spine{display:none}
+  .step-body{flex:1;min-width:0;padding-bottom:6px}
+  .step-body h2{margin:6px 0 8px;font-size:19px;font-weight:800;letter-spacing:-.2px}
+  .step-body>p.desc{margin:0 0 18px;font-size:14.5px;line-height:1.7;color:var(--ink-soft);max-width:60ch}
+
+  .mock{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+  .mock-tag{font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;color:var(--ink-soft);text-transform:uppercase;margin-bottom:14px}
+  .mock-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+  .mock-field{grid-column:span 2}
+  .mock-field.half{grid-column:span 1}
+  .mock-field label{display:block;font-size:11.5px;font-weight:700;color:var(--ink-soft);margin-bottom:5px}
+  .mock-field label .req{color:var(--clay)}
+  .mock-input{background:var(--paper-raise);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;color:var(--ink-soft)}
+  .mock-pills{display:flex;gap:7px;flex-wrap:wrap}
+  .mock-pill{border:1px solid var(--line);border-radius:8px;padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--ink-soft);background:var(--paper-raise)}
+  .mock-pill.on{background:var(--teal);border-color:var(--teal);color:#fff}
+  .mock-btn{margin-top:16px;display:inline-block;background:var(--teal);color:#fff;font-size:13.5px;font-weight:700;padding:11px 20px;border-radius:9px}
+
+  .fields{display:flex;flex-direction:column;gap:0;margin-top:2px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .fields .fr{display:flex;gap:14px;padding:13px 18px;background:var(--paper)}
+  .fields .fr:nth-child(even){background:var(--paper-raise)}
+  .fields .fr .fk{flex:none;width:150px;font-size:13.5px;font-weight:700;color:var(--ink)}
+  .fields .fr .fv{font-size:13.5px;line-height:1.55;color:var(--ink-soft)}
+  .fields .fr .fv b{color:var(--ink);font-weight:700}
+
+  /* Tracking status legend */
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
+  .lg-card{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--paper)}
+  .lg-top{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+  .dot{width:12px;height:12px;border-radius:50%;flex:none}
+  .lg-card h4{margin:0;font-size:14.5px;font-weight:800}
+  .lg-card p{margin:0;font-size:13px;line-height:1.6;color:var(--ink-soft)}
+  .pending .dot{background:var(--amber)}
+  .accepted .dot{background:var(--teal)}
+  .admitted .dot{background:var(--sage)}
+  .notused .dot{background:var(--clay)}
+
+  .footer-card{background:var(--teal-deep);color:#eaf4f3;border-radius:14px;padding:20px 24px;margin-top:30px;display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between}
+  .footer-card .fc-main{font-size:13.5px;line-height:1.6}
+  .footer-card .fc-main b{display:block;font-size:14.5px;margin-bottom:2px}
+  .footer-card .fc-meta{font-family:var(--font-mono);font-size:12px;color:#a9d3d6;text-align:right}
+
+  @media (max-width:640px){
+    body{padding:24px 14px 48px}
+    .band{padding:20px 22px}
+    .body-pad{padding:24px 22px 30px}
+    .entry{grid-template-columns:1fr;justify-items:center;text-align:center}
+    .entry-info p{margin-inline:auto}
+    .call{flex-direction:column;align-items:flex-start}
+    .call .nums{width:100%}
+    .legend{grid-template-columns:1fr}
+    .mock-grid{grid-template-columns:1fr}
+    .mock-field.half{grid-column:span 1}
+    .fields .fr{flex-direction:column;gap:3px}
+    .fields .fr .fk{width:auto}
+    .footer-card{flex-direction:column;align-items:flex-start}
+    .footer-card .fc-meta{text-align:left}
+  }
+  @media print{
+    body{padding:0;background:#fff}
+    .wrap{max-width:none;gap:0}
+    .sheet{box-shadow:none;border-radius:0;border:none;page-break-after:always}
+    .sheet:last-child{page-break-after:auto}
+  }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ───────────────── PAGE 1 : กรอกข้อมูล ───────────────── -->
+  <section class="sheet">
+    <div class="band">
+      <div class="hosp">รพ.สมเด็จพระยุพราชเดชอุดม · หน่วยงาน ICU</div>
+      <h1>คู่มือจองเตียง ICU — สำหรับหอผู้ป่วย</h1>
+      <p>ขั้นตอนที่ 1 · การกรอกข้อมูลจองเตียง</p>
+    </div>
+
+    <div class="body-pad">
+
+      <div class="entry">
+        <div class="qr-card">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 33 33" shape-rendering="crispEdges" role="img" aria-label="QR code เข้าเว็บจองเตียง ICU"><path d="M0 0h7v1h-7zM11 0h4v1h-4zM16 0h5v1h-5zM23 0h1v1h-1zM26 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM9 1h2v1h-2zM12 1h6v1h-6zM20 1h1v1h-1zM22 1h1v1h-1zM24 1h1v1h-1zM26 1h1v1h-1zM32 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM8 2h3v1h-3zM12 2h2v1h-2zM15 2h1v1h-1zM17 2h2v1h-2zM20 2h1v1h-1zM23 2h2v1h-2zM26 2h1v1h-1zM28 2h3v1h-3zM32 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM8 3h5v1h-5zM14 3h1v1h-1zM16 3h1v1h-1zM19 3h4v1h-4zM24 3h1v1h-1zM26 3h1v1h-1zM28 3h3v1h-3zM32 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM8 4h1v1h-1zM10 4h1v1h-1zM15 4h1v1h-1zM18 4h1v1h-1zM21 4h1v1h-1zM24 4h1v1h-1zM26 4h1v1h-1zM28 4h3v1h-3zM32 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM8 5h1v1h-1zM10 5h2v1h-2zM14 5h5v1h-5zM20 5h2v1h-2zM26 5h1v1h-1zM32 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h1v1h-1zM24 6h1v1h-1zM26 6h7v1h-7zM8 7h3v1h-3zM12 7h1v1h-1zM15 7h1v1h-1zM21 7h3v1h-3zM0 8h1v1h-1zM2 8h5v1h-5zM13 8h3v1h-3zM17 8h1v1h-1zM22 8h2v1h-2zM26 8h5v1h-5zM1 9h2v1h-2zM5 9h1v1h-1zM7 9h1v1h-1zM9 9h2v1h-2zM16 9h1v1h-1zM18 9h2v1h-2zM21 9h1v1h-1zM23 9h1v1h-1zM26 9h2v1h-2zM29 9h2v1h-2zM32 9h1v1h-1zM1 10h1v1h-1zM5 10h2v1h-2zM12 10h1v1h-1zM15 10h2v1h-2zM18 10h1v1h-1zM20 10h2v1h-2zM28 10h1v1h-1zM30 10h1v1h-1zM0 11h1v1h-1zM4 11h1v1h-1zM11 11h2v1h-2zM14 11h1v1h-1zM16 11h1v1h-1zM20 11h3v1h-3zM24 11h3v1h-3zM28 11h3v1h-3zM32 11h1v1h-1zM0 12h2v1h-2zM3 12h1v1h-1zM6 12h2v1h-2zM9 12h1v1h-1zM12 12h1v1h-1zM15 12h1v1h-1zM18 12h1v1h-1zM21 12h1v1h-1zM24 12h2v1h-2zM27 12h1v1h-1zM29 12h1v1h-1zM1 13h2v1h-2zM4 13h1v1h-1zM8 13h3v1h-3zM12 13h6v1h-6zM20 13h1v1h-1zM22 13h4v1h-4zM29 13h1v1h-1zM31 13h2v1h-2zM0 14h2v1h-2zM3 14h5v1h-5zM9 14h3v1h-3zM14 14h1v1h-1zM19 14h1v1h-1zM24 14h3v1h-3zM31 14h1v1h-1zM1 15h2v1h-2zM7 15h1v1h-1zM10 15h3v1h-3zM14 15h1v1h-1zM16 15h1v1h-1zM18 15h5v1h-5zM25 15h6v1h-6zM2 16h1v1h-1zM6 16h4v1h-4zM11 16h3v1h-3zM17 16h1v1h-1zM19 16h2v1h-2zM24 16h2v1h-2zM27 16h2v1h-2zM32 16h1v1h-1zM0 17h1v1h-1zM2 17h1v1h-1zM7 17h1v1h-1zM10 17h1v1h-1zM16 17h4v1h-4zM22 17h2v1h-2zM25 17h3v1h-3zM29 17h2v1h-2zM32 17h1v1h-1zM1 18h1v1h-1zM3 18h4v1h-4zM8 18h3v1h-3zM14 18h2v1h-2zM17 18h1v1h-1zM22 18h1v1h-1zM24 18h2v1h-2zM27 18h2v1h-2zM30 18h2v1h-2zM1 19h1v1h-1zM5 19h1v1h-1zM7 19h1v1h-1zM13 19h2v1h-2zM16 19h3v1h-3zM20 19h1v1h-1zM23 19h1v1h-1zM25 19h1v1h-1zM27 19h5v1h-5zM0 20h1v1h-1zM2 20h1v1h-1zM4 20h1v1h-1zM6 20h2v1h-2zM9 20h1v1h-1zM11 20h2v1h-2zM16 20h1v1h-1zM20 20h6v1h-6zM27 20h1v1h-1zM29 20h1v1h-1zM31 20h1v1h-1zM0 21h5v1h-5zM9 21h1v1h-1zM11 21h2v1h-2zM15 21h1v1h-1zM17 21h2v1h-2zM21 21h1v1h-1zM23 21h1v1h-1zM26 21h1v1h-1zM32 21h1v1h-1zM0 22h1v1h-1zM2 22h1v1h-1zM5 22h6v1h-6zM12 22h6v1h-6zM20 22h1v1h-1zM25 22h1v1h-1zM28 22h4v1h-4zM0 23h1v1h-1zM2 23h1v1h-1zM4 23h1v1h-1zM8 23h1v1h-1zM12 23h1v1h-1zM15 23h1v1h-1zM21 23h1v1h-1zM28 23h3v1h-3zM0 24h1v1h-1zM6 24h1v1h-1zM8 24h1v1h-1zM10 24h1v1h-1zM12 24h2v1h-2zM15 24h1v1h-1zM17 24h1v1h-1zM20 24h1v1h-1zM24 24h5v1h-5zM31 24h2v1h-2zM8 25h2v1h-2zM11 25h1v1h-1zM19 25h1v1h-1zM21 25h2v1h-2zM24 25h1v1h-1zM28 25h1v1h-1zM30 25h3v1h-3zM0 26h7v1h-7zM10 26h1v1h-1zM14 26h2v1h-2zM18 26h1v1h-1zM21 26h1v1h-1zM23 26h2v1h-2zM26 26h1v1h-1zM28 26h1v1h-1zM30 26h2v1h-2zM0 27h1v1h-1zM6 27h1v1h-1zM8 27h3v1h-3zM12 27h1v1h-1zM14 27h3v1h-3zM19 27h6v1h-6zM28 27h3v1h-3zM0 28h1v1h-1zM2 28h3v1h-3zM6 28h1v1h-1zM8 28h3v1h-3zM13 28h3v1h-3zM18 28h1v1h-1zM21 28h1v1h-1zM24 28h6v1h-6zM32 28h1v1h-1zM0 29h1v1h-1zM2 29h3v1h-3zM6 29h1v1h-1zM8 29h1v1h-1zM10 29h4v1h-4zM15 29h2v1h-2zM20 29h6v1h-6zM28 29h2v1h-2zM32 29h1v1h-1zM0 30h1v1h-1zM2 30h3v1h-3zM6 30h1v1h-1zM8 30h7v1h-7zM19 30h1v1h-1zM24 30h1v1h-1zM26 30h2v1h-2zM29 30h1v1h-1zM0 31h1v1h-1zM6 31h1v1h-1zM11 31h1v1h-1zM13 31h2v1h-2zM16 31h1v1h-1zM19 31h4v1h-4zM28 31h1v1h-1zM30 31h1v1h-1zM0 32h7v1h-7zM8 32h1v1h-1zM14 32h1v1h-1zM17 32h1v1h-1zM19 32h2v1h-2zM23 32h2v1h-2zM26 32h2v1h-2zM31 32h1v1h-1z" fill="#0a2b31"/></svg>
+        </div>
+        <div class="entry-info">
+          <div class="kick">สแกนเพื่อเข้าเว็บจอง</div>
+          <h2>เปิดหน้าจองด้วยมือถือ</h2>
+          <p>ใช้กล้องมือถือสแกน QR นี้เพื่อเปิดเว็บจองเตียง ICU ได้ทันที ไม่ต้องพิมพ์ลิงก์ ใช้ได้ทั้งมือถือและคอมพิวเตอร์</p>
+          <a class="url" href="https://tanarak23645-cloud.github.io/ICUbed/">tanarak23645-cloud.github.io/ICUbed</a>
+        </div>
+      </div>
+
+      <div class="call">
+        <div class="ic">📞</div>
+        <div class="txt">
+          <b>ทุกครั้งที่จอง ต้องโทรแจ้ง ICU เสมอ</b>
+          <span>หลังกดบันทึกการจองในระบบแล้ว ให้โทรแจ้งเจ้าหน้าที่ ICU ทุกครั้งเพื่อยืนยันการรับเรื่อง</span>
+        </div>
+        <div class="nums">
+          <span class="num">729<small>เบอร์ภายใน</small></span>
+          <span class="num">725<small>เบอร์ภายใน</small></span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="spine"></div>
+        <div class="badge">1</div>
+        <div class="step-body">
+          <h2>กรอกฟอร์มในแท็บ “จองเตียง ICU”</h2>
+          <p class="desc">กรอกข้อมูลให้ครบทุกช่องที่มีเครื่องหมาย <span style="color:var(--clay);font-weight:700">*</span> ระบบจะไม่ยอมให้บันทึกหากยังกรอกไม่ครบ</p>
+          <div class="mock">
+            <div class="mock-tag">ตัวอย่างหน้าจอ — ใช้เพื่ออธิบายเท่านั้น</div>
+            <div class="mock-grid">
+              <div class="mock-field"><label>หน่วยงานที่ส่งจอง <span class="req">*</span></label><div class="mock-input">— เลือกหน่วยงาน —</div></div>
+              <div class="mock-field"><label>แพทย์เจ้าของไข้ <span class="req">*</span></label><div class="mock-input">— เลือกแพทย์เจ้าของไข้ —</div></div>
+              <div class="mock-field half"><label>ชื่อ-สกุล / HN <span class="req">*</span></label><div class="mock-input">นาย สมชาย ใจดี · HN 65xxxx</div></div>
+              <div class="mock-field half"><label>Diagnosis <span class="req">*</span></label><div class="mock-input">เช่น Septic shock</div></div>
+              <div class="mock-field"><label>จองเตียงสาขา <span class="req">*</span></label>
+                <div class="mock-pills"><span class="mock-pill on">อายุรกรรม</span><span class="mock-pill">ศัลยกรรม</span></div>
+              </div>
+              <div class="mock-field"><label>Plan / Unplan ICU <span class="req">*</span></label>
+                <div class="mock-pills"><span class="mock-pill on">Plan ICU</span><span class="mock-pill">Unplan ICU</span></div>
+              </div>
+            </div>
+            <span class="mock-btn">บันทึกการจอง → เข้าคิว ICU</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="badge">2</div>
+        <div class="step-body">
+          <h2>ความหมายของแต่ละช่อง</h2>
+          <p class="desc">กรอกตามนี้เพื่อให้ ICU ได้ข้อมูลครบและจัดคิวถูกต้อง</p>
+          <div class="fields">
+            <div class="fr"><div class="fk">หน่วยงานที่ส่งจอง</div><div class="fv">เลือกชื่อ ward ของคุณจากรายการ</div></div>
+            <div class="fr"><div class="fk">แพทย์เจ้าของไข้</div><div class="fv">เลือกชื่อแพทย์จากรายการที่มีให้</div></div>
+            <div class="fr"><div class="fk">Diagnosis</div><div class="fv">ระบุการวินิจฉัยให้ชัดเจน เช่น <b>Septic shock</b>, <b>Post-op laparotomy</b></div></div>
+            <div class="fr"><div class="fk">จองเตียงสาขา</div><div class="fv">เลือก <b>อายุรกรรม</b> หรือ <b>ศัลยกรรม</b> — ระบบจะสลับให้กรอกวันจอง/วันผ่าตัดให้เอง</div></div>
+            <div class="fr"><div class="fk">เวลา</div><div class="fv">ระบุเวลา และเลือก <b>On call</b> หากเป็นเคสนอกเวลา</div></div>
+            <div class="fr"><div class="fk">Plan / Unplan</div><div class="fv"><b>Plan ICU</b> = วางแผนล่วงหน้า · <b>Unplan ICU</b> = ไม่ได้วางแผน</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ───────────────── PAGE 2 : ติดตามสถานะ ───────────────── -->
+  <section class="sheet">
+    <div class="band">
+      <div class="hosp">รพ.สมเด็จพระยุพราชเดชอุดม · หน่วยงาน ICU</div>
+      <h1>การติดตามสถานะการจอง</h1>
+      <p>ขั้นตอนที่ 2 · ตรวจสอบว่าเคสของคุณถึงไหนแล้ว</p>
+    </div>
+
+    <div class="body-pad">
+
+      <div class="step">
+        <div class="spine"></div>
+        <div class="badge">3</div>
+        <div class="step-body">
+          <h2>เปิดแท็บ “คิวรับจอง ICU”</h2>
+          <p class="desc">พิมพ์ <strong>ชื่อผู้ป่วย / HN / แพทย์ / ชื่อ ward</strong> ในช่องค้นหาด้านบน เพื่อหาเคสของ ward ตัวเองได้ทันที — หน้าจอจะอัปเดตสถานะเองแบบเรียลไทม์ ไม่ต้องรีเฟรช</p>
+          <div class="mock">
+            <div class="mock-tag">ช่องค้นหา</div>
+            <div class="mock-input">🔍 &nbsp;ค้นหาชื่อคนไข้ / HN / Diagnosis / แพทย์ / หน่วยงาน</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="badge">4</div>
+        <div class="step-body">
+          <h2>อ่านสถานะจากสีของป้าย</h2>
+          <p class="desc">สีบนป้ายสถานะตรงกับหน้าเว็บจริงทุกประการ ดูสีแล้วรู้ทันทีว่าเคสอยู่ขั้นตอนไหน</p>
+          <div class="legend">
+            <div class="lg-card pending">
+              <div class="lg-top"><span class="dot"></span><h4>รอรับจอง</h4></div>
+              <p>บันทึกเข้าระบบแล้ว รอ ICU กดรับเรื่อง</p>
+            </div>
+            <div class="lg-card accepted">
+              <div class="lg-top"><span class="dot"></span><h4>รับจองแล้ว</h4></div>
+              <p>ICU รับทราบและจัดเข้าคิวเรียบร้อย</p>
+            </div>
+            <div class="lg-card admitted">
+              <div class="lg-top"><span class="dot"></span><h4>เข้า ICU แล้ว</h4></div>
+              <p>ผู้ป่วยได้เตียง ICU — เตรียมส่งตัวได้</p>
+            </div>
+            <div class="lg-card notused">
+              <div class="lg-top"><span class="dot"></span><h4>ไม่ได้เข้า ICU</h4></div>
+              <p>พร้อมเหตุผล เช่น กลับตึก / refer / เลื่อน OR</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-card">
+        <div class="fc-main">
+          <b>สอบถามเพิ่มเติม โทร ICU ได้ตลอด 24 ชม.</b>
+          เบอร์ภายใน 729 หรือ 725 — จัดทำโดยหน่วยงาน ICU
+        </div>
+        <div class="fc-meta">
+          tanarak23645-cloud.github.io/ICUbed<br>
+          หน้า 2/2
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
