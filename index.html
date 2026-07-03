@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -507,7 +506,32 @@ function buildAdmin() {
       <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:12px">รายชื่อแพทย์ (${doctors.length})</div>
       ${docRows}
     </div>
+    <div style="background:#fff;border:1px solid #f3c9c9;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04);margin-top:18px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:#c0392b;text-transform:uppercase;margin-bottom:10px">⚠️ Danger Zone</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px">ลบข้อมูลการจองทั้งหมด (${state.bookings.length} รายการ)</div>
+      <p style="margin:0 0 16px;font-size:13px;color:#6b7787">ลบข้อมูลคิวจองและรายงานทั้งหมดออกจากระบบถาวร — ใช้เมื่อต้องการล้างข้อมูลทดสอบก่อนใช้งานจริง (รายชื่อแพทย์จะไม่ถูกลบ)</p>
+      <button onclick="clearAllBookings()" style="padding:11px 22px;border:1px solid #c0392b;border-radius:9px;background:#fff;color:#c0392b;font-size:14px;font-weight:700;cursor:pointer">🗑️ ลบข้อมูลการจองทั้งหมด</button>
+    </div>
   </div>`;
+}
+
+async function clearAllBookings() {
+  if (!confirm('ต้องการลบข้อมูลการจองทั้งหมด '+state.bookings.length+' รายการใช่หรือไม่?')) return;
+  if (!confirm('ยืนยันอีกครั้ง: ข้อมูลคิวจองและรายงานทั้งหมดจะหายถาวร ย้อนกลับไม่ได้!')) return;
+  try {
+    const snap = await db.collection('bookings').get();
+    const batch = db.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    state.bookings = [];
+    state.toast = 'ลบข้อมูลทั้งหมดเรียบร้อย — ระบบพร้อมใช้งานจริง';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { state.toast = ''; render(); }, 3200);
+    render();
+  } catch(e) {
+    console.error('Clear error:', e);
+    alert('เกิดข้อผิดพลาด: ' + e.message);
+  }
 }
 
 function addDoctorClick() {
@@ -832,19 +856,11 @@ function doDownload(name, mime) {
   // Wait for Firebase to be ready
   await new Promise(r => setTimeout(r, 500));
   try {
-    let data=await loadData();
-    if (!data||!data.length) {
-      data=seed();
-      state.bookings=data;
-      await persist();
-    } else {
-      state.bookings=data;
-    }
+    const data=await loadData();
+    state.bookings=data||[];
     render();
   } catch(e) {
     console.error('Init error:', e);
-    // Fallback: use seed data if Firestore fails
-    state.bookings=seed();
     render();
   }
 })();
