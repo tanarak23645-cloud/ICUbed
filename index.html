@@ -69,6 +69,7 @@ let state = {
   form: blankForm(),
   queueFilter: 'pending',
   queueSearch: '',
+  queueDate: '',
   reportMode: 'month',
   reportMonth: CUR,
   reportFY: '2026',
@@ -363,6 +364,24 @@ function buildQueueCard(b, no) {
 </div>`;
 }
 
+function queueFilterList() {
+  const bk=state.bookings;
+  let pend=bk.filter(b=>b.status==='pending');
+  const acc=bk.filter(b=>b.status==='accepted').sort((a,b)=>(a.acceptedAt||a.bookedAt)-(b.acceptedAt||b.bookedAt));
+  const noMap={}; pend.forEach((b,i)=>{noMap[b.id]=i+1;}); acc.forEach((b,i)=>{noMap[b.id]=i+1;});
+  const flt=state.adminAuthed?state.queueFilter:'pending';
+  let raw;
+  if (flt==='pending') raw=pend;
+  else if (flt==='accepted') raw=acc;
+  else if (flt==='all') raw=[...pend,...acc,...bk.filter(b=>b.status==='admitted'||b.status==='not_used').sort((a,b)=>b.bookedAt-a.bookedAt)];
+  else raw=bk.filter(b=>b.status===flt).sort((a,b)=>b.bookedAt-a.bookedAt);
+  const q=state.queueSearch.trim().toLowerCase();
+  if (q) raw=raw.filter(b=>[b.firstName,b.lastName,b.prefix,b.hn,b.diagnosis,b.doctor,b.ward].join(' ').toLowerCase().includes(q));
+  const d=state.queueDate;
+  if (d) raw=raw.filter(b=>b.bookingDate===d||b.surgeryDate===d);
+  return {raw,noMap};
+}
+
 function buildQueue() {
   const bk=state.bookings;
   const pendCount=bk.filter(b=>b.status==='pending').length;
@@ -370,19 +389,8 @@ function buildQueue() {
   const admCount=bk.filter(b=>b.status==='admitted').length;
   const nuCount=bk.filter(b=>b.status==='not_used').length;
 
-  let pend=bk.filter(b=>b.status==='pending');
-  const acc=bk.filter(b=>b.status==='accepted').sort((a,b)=>(a.acceptedAt||a.bookedAt)-(b.acceptedAt||b.bookedAt));
-  const noMap={}; pend.forEach((b,i)=>{noMap[b.id]=i+1;}); acc.forEach((b,i)=>{noMap[b.id]=i+1;});
-
   const flt=state.adminAuthed?state.queueFilter:'pending';
-  let raw;
-  if (flt==='pending') raw=pend;
-  else if (flt==='accepted') raw=acc;
-  else if (flt==='all') raw=[...pend,...acc,...bk.filter(b=>b.status==='admitted'||b.status==='not_used').sort((a,b)=>b.bookedAt-a.bookedAt)];
-  else raw=bk.filter(b=>b.status===flt).sort((a,b)=>b.bookedAt-a.bookedAt);
-
-  const q=state.queueSearch.trim().toLowerCase();
-  if (q) raw=raw.filter(b=>[b.firstName,b.lastName,b.prefix,b.hn,b.diagnosis,b.doctor,b.ward].join(' ').toLowerCase().includes(q));
+  const {raw,noMap}=queueFilterList();
 
   const allChipsDef=[
     {key:'pending',label:'รอรับจอง',count:pendCount,color:'#b7791f'},
@@ -404,9 +412,16 @@ function buildQueue() {
 
   return `<div>
   <div style="margin-bottom:18px"><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">คิวรับจอง ICU</h1><p style="margin:0;font-size:14px;color:#6b7787">${state.adminAuthed?'รับจองจาก ward → จัดลำดับคิว → สรุปผลว่าเคสได้เข้า ICU หรือไม่':'🔒 แสดงเฉพาะคิวรอรับจอง — การรับจองและจัดการคิวทำได้เฉพาะเจ้าหน้าที่ ICU (เข้าสู่ระบบที่แท็บ Admin)'}</p></div>
-  <div style="position:relative;margin-bottom:16px;max-width:460px">
-    <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9aa6b2;font-size:15px">🔍</span>
-    <input id="queue-search" value="${esc(state.queueSearch)}" placeholder="ค้นหาชื่อคนไข้ / HN / Diagnosis / แพทย์ / หน่วยงาน" style="width:100%;padding:11px 14px 11px 40px;border:1px solid #d6dee6;border-radius:11px;font-size:14px;background:#fff;color:#15202b;outline:none">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+    <div style="position:relative;flex:1;min-width:250px;max-width:460px">
+      <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9aa6b2;font-size:15px">🔍</span>
+      <input id="queue-search" value="${esc(state.queueSearch)}" placeholder="ค้นหาชื่อคนไข้ / HN / Diagnosis / แพทย์ / หน่วยงาน" style="width:100%;padding:11px 14px 11px 40px;border:1px solid #d6dee6;border-radius:11px;font-size:14px;background:#fff;color:#15202b;outline:none">
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:13px;color:#5d6b7a;font-weight:600;white-space:nowrap">📅 วันจอง/วันผ่าตัด</span>
+      <input id="queue-date" type="date" value="${esc(state.queueDate)}" style="padding:10px 12px;border:1px solid ${state.queueDate?'var(--accent)':'#d6dee6'};border-radius:11px;font-size:14px;background:#fff;color:#15202b;outline:none">
+      ${state.queueDate?`<button id="queue-date-clear" style="padding:9px 13px;border:1px solid #d6dee6;border-radius:11px;background:#fff;color:#c0392b;font-size:13px;font-weight:600;cursor:pointer">✕ ล้างวันที่</button>`:''}
+    </div>
   </div>
   <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:20px">${chips}</div>
   ${emptyHtml}
@@ -683,23 +698,18 @@ function bindEvents() {
       state.queueSearch=e.target.value;
       const cards=document.getElementById('queue-cards');
       if (cards) {
-        const bk=state.bookings;
-        let pend=bk.filter(b=>b.status==='pending');
-        const acc=bk.filter(b=>b.status==='accepted').sort((a,b)=>(a.acceptedAt||a.bookedAt)-(b.acceptedAt||b.bookedAt));
-        const noMap={}; pend.forEach((b,i)=>{noMap[b.id]=i+1;}); acc.forEach((b,i)=>{noMap[b.id]=i+1;});
-        const flt=state.adminAuthed?state.queueFilter:'pending';
-        let raw;
-        if (flt==='pending') raw=pend;
-        else if (flt==='accepted') raw=acc;
-        else if (flt==='all') raw=[...pend,...acc,...bk.filter(b=>b.status==='admitted'||b.status==='not_used').sort((a,b)=>b.bookedAt-a.bookedAt)];
-        else raw=bk.filter(b=>b.status===flt).sort((a,b)=>b.bookedAt-a.bookedAt);
-        const q=state.queueSearch.trim().toLowerCase();
-        if (q) raw=raw.filter(b=>[b.firstName,b.lastName,b.prefix,b.hn,b.diagnosis,b.doctor,b.ward].join(' ').toLowerCase().includes(q));
+        const {raw,noMap}=queueFilterList();
         cards.innerHTML=raw.map(b=>buildQueueCard(b,noMap[b.id])).join('');
         bindQueueCardEvents();
       }
     });
   }
+
+  // Queue date filter
+  const qd=app.querySelector('#queue-date');
+  if (qd) qd.addEventListener('change',e=>{ state.queueDate=e.target.value; render(); });
+  const qdc=app.querySelector('#queue-date-clear');
+  if (qdc) qdc.addEventListener('click',()=>{ state.queueDate=''; render(); });
 
   // Queue filter chips
   app.querySelectorAll('[data-filter]').forEach(btn=>btn.addEventListener('click',()=>{ state.queueFilter=btn.dataset.filter; render(); }));
