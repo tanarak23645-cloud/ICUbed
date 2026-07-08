@@ -41,7 +41,7 @@ setTimeout(() => { db = firebase.firestore(); setupRealtimeListener(); }, 100);
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const KEY = 'icu_booking_dechudom_v2';
-const CUR = '2026-06';
+const CUR = (d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))(new Date());
 const WARDS = ["หอผู้ป่วยศัลยกรรมชาย","หอผู้ป่วยศัลยกรรมหญิง","หอผู้ป่วย EENT","หอผู้ป่วยพิเศษศัลย์-ออร์โธ","หอผู้ป่วยอายุรกรรมชาย","หอผู้ป่วยอายุรกรรมหญิง","หอผู้ป่วยอายุรกรรม3","หอผู้ป่วย Cohort","หอผู้ป่วยพิเศษทวี-กันยา","ER","หอผู้ป่วยออร์โธปิดิกส์","OPD","หอผู้ป่วยสูติ-นรีฯ","หอผู้ป่วยพิเศษสูติ-นรีฯ","LR","อื่นๆ"];
 let DOCTORS = []; // Load from Firebase
 const PREFIXES = ["นาย","นาง","นางสาว","เด็กหญิง","เด็กชาย"];
@@ -203,6 +203,7 @@ function fmtDate(d) { if (!d) return '—'; const p=String(d).split('-'); return
 function fmtFull(b) { const au=b.specialty==='อายุรกรรม', d=au?b.bookingDate:b.surgeryDate; if (!d) return '—'; const p=String(d).split('-'); return p.length===3?(parseInt(p[2])+'/'+parseInt(p[1])+'/'+(parseInt(p[0])+543)):d; }
 function mLabel(m) { const p=m.split('-'); return THM[parseInt(p[1])-1]+' '+(parseInt(p[0])+543); }
 function mShort(m) { return THM[parseInt(m.split('-')[1])-1]; }
+function monthOf(b) { const d=b.specialty==='ศัลยกรรม'?(b.surgeryDate||b.bookingDate):(b.bookingDate||b.surgeryDate); return (d&&String(d).length>=7)?String(d).slice(0,7):(b.month||CUR); }
 function fyOf(m) { const mo=parseInt(m.split('-')[1]); return mo>=10?parseInt(m.split('-')[0])+1:parseInt(m.split('-')[0]); }
 function fyLabel(fy) { return 'ปีงบประมาณ '+(fy+543); }
 function fyOrder(m) { const mo=parseInt(m.split('-')[1]); return mo>=10?mo-10:mo+2; }
@@ -217,10 +218,10 @@ function getScope() {
   const bk=state.bookings;
   if (state.reportMode==='year') {
     const fy=parseInt(state.reportFY);
-    return {mode:'year',label:fyLabel(fy),fileTag:'FY'+(fy+543),periodText:'ปีงบประมาณ '+(fy+543)+' (ต.ค. '+(fy-1+543)+' – ก.ย. '+(fy+543)+')',list:bk.filter(b=>fyOf(b.month)===fy)};
+    return {mode:'year',label:fyLabel(fy),fileTag:'FY'+(fy+543),periodText:'ปีงบประมาณ '+(fy+543)+' (ต.ค. '+(fy-1+543)+' – ก.ย. '+(fy+543)+')',list:bk.filter(b=>fyOf(monthOf(b))===fy)};
   }
   const m=state.reportMonth;
-  return {mode:'month',label:mLabel(m),fileTag:m,periodText:'เดือน '+mLabel(m),list:bk.filter(b=>b.month===m)};
+  return {mode:'month',label:mLabel(m),fileTag:m,periodText:'เดือน '+mLabel(m),list:bk.filter(b=>monthOf(b)===m)};
 }
 
 // ─── HTML BUILDERS ───────────────────────────────────────────────────────────
@@ -364,11 +365,19 @@ function buildQueueCard(b, no) {
 </div>`;
 }
 
+function schedDateOf(b) { return (b.specialty==='ศัลยกรรม'?(b.surgeryDate||b.bookingDate):(b.bookingDate||b.surgeryDate))||''; }
+
 function queueFilterList() {
   const bk=state.bookings;
   let pend=bk.filter(b=>b.status==='pending');
-  const acc=bk.filter(b=>b.status==='accepted').sort((a,b)=>(a.acceptedAt||a.bookedAt)-(b.acceptedAt||b.bookedAt));
-  const noMap={}; pend.forEach((b,i)=>{noMap[b.id]=i+1;}); acc.forEach((b,i)=>{noMap[b.id]=i+1;});
+  // คิวจอง: จัดกลุ่มตามวันจอง/วันผ่าตัด — วันเดียวกันใครกดจองเข้าระบบก่อนได้คิวก่อน และนับเลขคิวแยกรายวัน (คิว 1 เริ่มใหม่ทุกวัน)
+  const acc=bk.filter(b=>b.status==='accepted').sort((a,b)=>{
+    const da=schedDateOf(a)||'9999', db2=schedDateOf(b)||'9999';
+    if (da!==db2) return da<db2?-1:1;
+    return (a.bookedAt||0)-(b.bookedAt||0);
+  });
+  const noMap={}; pend.forEach((b,i)=>{noMap[b.id]=i+1;});
+  const dayCnt={}; acc.forEach(b=>{const d=schedDateOf(b)||'-'; dayCnt[d]=(dayCnt[d]||0)+1; noMap[b.id]=dayCnt[d];});
   const flt=state.adminAuthed?state.queueFilter:'pending';
   let raw;
   if (flt==='pending') raw=pend;
@@ -431,9 +440,11 @@ function buildQueue() {
 
 function buildReport() {
   const bk=state.bookings, mode=state.reportMode, sc=getScope(), md=sc.list;
-  const allMonths=[...new Set(bk.map(b=>b.month))].sort();
+  const allMonths=[...new Set(bk.map(monthOf))].sort();
+  if (allMonths.length&&!allMonths.includes(state.reportMonth)) state.reportMonth=allMonths[allMonths.length-1];
   const monthOpts=allMonths.map(m=>`<option value="${m}"${state.reportMonth===m?' selected':''}>${mLabel(m)}</option>`).join('');
-  const allFY=[...new Set(bk.map(b=>fyOf(b.month)))].sort((a,b)=>a-b);
+  const allFY=[...new Set(bk.map(b=>fyOf(monthOf(b))))].sort((a,b)=>a-b);
+  if (allFY.length&&!allFY.includes(parseInt(state.reportFY))) state.reportFY=String(allFY[allFY.length-1]);
   const fyOpts=allFY.map(fy=>`<option value="${fy}"${state.reportFY===String(fy)?' selected':''}>${fyLabel(fy)}</option>`).join('');
   const modeMonSt=`display:inline-flex;align-items:center;justify-content:center;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:1px solid ${mode==='month'?'var(--accent);background:var(--accent);color:#fff':'#d6dee6;background:#fff;color:#33414f'}`;
   const modeYrSt=`display:inline-flex;align-items:center;justify-content:center;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:1px solid ${mode==='year'?'var(--accent);background:var(--accent);color:#fff':'#d6dee6;background:#fff;color:#33414f'}`;
@@ -453,8 +464,8 @@ function buildReport() {
   let trendMonths;
   if (mode==='year') trendMonths=allMonths.filter(m=>fyOf(m)===parseInt(state.reportFY)).sort((a,b)=>fyOrder(a)-fyOrder(b));
   else trendMonths=allMonths;
-  const trendMax=Math.max(1,...trendMonths.map(m=>bk.filter(b=>b.month===m).length));
-  const trendBars=trendMonths.map(m=>{const v=bk.filter(b=>b.month===m).length;const fill=(mode==='month'&&m===state.reportMonth)||(mode==='year')?'var(--accent)':'#c3d0db';return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px"><div style="font-size:13px;font-weight:700;color:#33414f">${v}</div><div style="height:150px;width:100%;display:flex;align-items:flex-end;justify-content:center"><div style="width:100%;max-width:46px;height:${Math.max(5,Math.round(v/trendMax*100))}%;min-height:5px;border-radius:8px 8px 0 0;background:${fill}"></div></div><div style="font-size:11.5px;color:#6b7787;font-weight:500">${mShort(m)}</div></div>`;}).join('');
+  const trendMax=Math.max(1,...trendMonths.map(m=>bk.filter(b=>monthOf(b)===m).length));
+  const trendBars=trendMonths.map(m=>{const v=bk.filter(b=>monthOf(b)===m).length;const fill=(mode==='month'&&m===state.reportMonth)||(mode==='year')?'var(--accent)':'#c3d0db';return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px"><div style="font-size:13px;font-weight:700;color:#33414f">${v}</div><div style="height:150px;width:100%;display:flex;align-items:flex-end;justify-content:center"><div style="width:100%;max-width:46px;height:${Math.max(5,Math.round(v/trendMax*100))}%;min-height:5px;border-radius:8px 8px 0 0;background:${fill}"></div></div><div style="font-size:11.5px;color:#6b7787;font-weight:500">${mShort(m)}</div></div>`;}).join('');
 
   const barRow=(b)=>`<div style="display:flex;align-items:center;gap:12px"><div style="width:150px;font-size:12.5px;color:#33414f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.label)}</div><div style="flex:1;height:12px;background:#eef1f4;border-radius:99px;overflow:hidden"><div style="height:100%;width:${b.pct};background:${b.color};border-radius:99px"></div></div><div style="width:28px;text-align:right;font-weight:700;font-size:13px">${b.value}</div></div>`;
   const barRowW=(b,w)=>`<div style="display:flex;align-items:center;gap:12px"><div style="width:${w}px;font-size:12.5px;color:#33414f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.label)}</div><div style="flex:1;height:12px;background:#eef1f4;border-radius:99px;overflow:hidden"><div style="height:100%;width:${b.pct};background:${b.color};border-radius:99px"></div></div><div style="width:28px;text-align:right;font-weight:700;font-size:13px">${b.value}</div></div>`;
@@ -812,7 +823,7 @@ function handleSubmit() {
   const miss=req.filter(r=>!String(f[r[0]]||'').trim()).map(r=>r[1]);
   if (miss.length) { state.formError='กรุณากรอก: '+miss.join(', '); render(); return; }
   const now=Date.now();
-  state.bookings=[...state.bookings,{...f,id:now,status:'pending',notUsedReason:'',nurse:'',summaryNurse:'',month:CUR,bookedAt:now,acceptedAt:0}];
+  state.bookings=[...state.bookings,{...f,id:now,status:'pending',notUsedReason:'',nurse:'',summaryNurse:'',month:monthOf(f),bookedAt:now,acceptedAt:0}];
   persist();
   state.form=blankForm();
   state.formError='';
