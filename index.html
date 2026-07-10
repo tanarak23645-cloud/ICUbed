@@ -355,6 +355,30 @@ function buildNav() {
 
 function buildBook() {
   const f=state.form;
+  // Dashboard คิววันนี้ — นับเคสในคิว (รอรับจอง+รับแล้ว) ที่วันจอง/วันผ่าตัดตรงกับวันนี้
+  const TODAY=(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'))(new Date());
+  const tq=state.bookings.filter(b=>(b.status==='pending'||b.status==='accepted')&&schedDateOf(b)===TODAY);
+  const medToday=tq.filter(b=>b.specialty==='อายุรกรรม').length, surgToday=tq.filter(b=>b.specialty==='ศัลยกรรม').length;
+  const todayLabel=(d=>d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+543))(new Date());
+  const todayDash=`<div style="display:flex;align-items:stretch;gap:16px;background:#fff;border:1px solid #e3e8ee;border-radius:14px;padding:13px 18px;box-shadow:0 1px 3px rgba(20,32,43,.04)">
+      <div style="display:flex;flex-direction:column;justify-content:center">
+        <div style="font-size:12px;font-weight:700;color:#33414f;white-space:nowrap">📋 คิวจองวันนี้</div>
+        <div style="font-size:11.5px;color:#9aa6b2;margin-top:2px">${todayLabel}</div>
+      </div>
+      <div style="width:1px;background:#e9edf2"></div>
+      <div style="text-align:center;min-width:62px;display:flex;flex-direction:column;justify-content:center">
+        <div style="font-size:23px;font-weight:800;letter-spacing:-.5px;color:#1d4ed8;line-height:1.1">${medToday}</div>
+        <div style="font-size:11px;font-weight:600;color:#5d6b7a">อายุรกรรม</div>
+      </div>
+      <div style="text-align:center;min-width:62px;display:flex;flex-direction:column;justify-content:center">
+        <div style="font-size:23px;font-weight:800;letter-spacing:-.5px;color:#b45309;line-height:1.1">${surgToday}</div>
+        <div style="font-size:11px;font-weight:600;color:#5d6b7a">ศัลยกรรม</div>
+      </div>
+      <div style="text-align:center;min-width:60px;background:var(--accent);border-radius:11px;padding:5px 12px;display:flex;flex-direction:column;justify-content:center">
+        <div style="font-size:23px;font-weight:800;letter-spacing:-.5px;color:#fff;line-height:1.1">${medToday+surgToday}</div>
+        <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,.88)">รวมคิว</div>
+      </div>
+    </div>`;
   const wardOpts=['<option value="">— เลือกหน่วยงาน —</option>',...WARDS.map((w,i)=>`<option value="${esc(w)}"${f.ward===w?' selected':''}>${i+1}  ${esc(w)}</option>`)].join('');
   const docOpts=['<option value="">— เลือกแพทย์เจ้าของไข้ —</option>',...DOCTORS.map((d,i)=>`<option value="${esc(d)}"${f.doctor===d?' selected':''}>${i+1}  ${esc(d)}</option>`)].join('');
   const pfxBtns=PREFIXES.map(p=>segBtn(p,f.prefix===p,`data-pick="prefix" data-val="${esc(p)}"`)).join('');
@@ -366,7 +390,10 @@ function buildBook() {
   const errHtml=state.formError?`<div style="margin-top:18px;padding:11px 14px;background:#fdecec;border:1px solid #f3c9c9;border-radius:10px;color:#b02a2a;font-size:13.5px;font-weight:500">${esc(state.formError)}</div>`:'';
   const inp=(name,val,ph,extra='')=>`<input name="${name}" value="${esc(val)}" placeholder="${ph}" ${extra} style="width:100%;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none">`;
   return `<div>
-  <div style="margin-bottom:22px"><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">แบบฟอร์มจองเตียง ICU</h1><p style="margin:0;font-size:14px;color:#6b7787">กรอกข้อมูลผู้ป่วยจาก ward ที่ต้องการส่งเข้า ICU — รายการที่บันทึกจะเข้าคิวรับเข้าทันที</p></div>
+  <div style="margin-bottom:22px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">แบบฟอร์มจองเตียง ICU</h1><p style="margin:0;font-size:14px;color:#6b7787">กรอกข้อมูลผู้ป่วยจาก ward ที่ต้องการส่งเข้า ICU — รายการที่บันทึกจะเข้าคิวรับเข้าทันที</p></div>
+    ${todayDash}
+  </div>
   <div style="display:flex;flex-direction:column;gap:18px">
     <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04)">
       <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:18px">ข้อมูลผู้ป่วย</div>
