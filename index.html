@@ -42,7 +42,7 @@ setTimeout(() => { db = firebase.firestore(); setupRealtimeListener(); }, 100);
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const KEY = 'icu_booking_dechudom_v2';
 const CUR = (d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))(new Date());
-const WARDS = ["หอผู้ป่วยศัลยกรรมชาย","หอผู้ป่วยศัลยกรรมหญิง","หอผู้ป่วย EENT","หอผู้ป่วยพิเศษศัลย์-ออร์โธ","หอผู้ป่วยอายุรกรรมชาย","หอผู้ป่วยอายุรกรรมหญิง","หอผู้ป่วยอายุรกรรม3","หอผู้ป่วย Cohort","หอผู้ป่วยพิเศษทวี-กันยา","ER","หอผู้ป่วยออร์โธปิดิกส์","OPD","หอผู้ป่วยสูติ-นรีฯ","หอผู้ป่วยพิเศษสูติ-นรีฯ","LR","อื่นๆ"];
+let WARDS = ["หอผู้ป่วยศัลยกรรมชาย","หอผู้ป่วยศัลยกรรมหญิง","หอผู้ป่วย EENT","หอผู้ป่วยพิเศษศัลย์-ออร์โธ","หอผู้ป่วยอายุรกรรมชาย","หอผู้ป่วยอายุรกรรมหญิง","หอผู้ป่วยอายุรกรรม3","หอผู้ป่วย Cohort","หอผู้ป่วยพิเศษทวี-กันยา","ER","หอผู้ป่วยออร์โธปิดิกส์","OPD","หอผู้ป่วยสูติ-นรีฯ","หอผู้ป่วยพิเศษสูติ-นรีฯ","LR","อื่นๆ"]; // ค่าเริ่มต้น — seed ขึ้น Firebase ครั้งแรก แล้วโหลดจาก Firebase แทน
 let DOCTORS = []; // Load from Firebase
 const PREFIXES = ["นาย","นาง","นางสาว","เด็กหญิง","เด็กชาย"];
 const REASONS = ["กลับตึก","off OR","refer","death","on vent นอกตึก","เลื่อน OR"];
@@ -63,6 +63,7 @@ let state = {
   screen: 'book',
   bookings: [],
   doctors: [],
+  wards: [],
   adminNewDoctor: '',
   adminAuthed: sessionStorage.getItem('icu_admin_auth')==='1',
   adminPwError: '',
@@ -117,6 +118,21 @@ function setupRealtimeListener() {
     render();
   }, err => console.error('Doctors listener error:', err));
 
+  db.collection('wards').onSnapshot(snap => {
+    if (snap.empty) {
+      // ครั้งแรก: ย้ายรายชื่อ ward เดิมจากโค้ดขึ้น Firebase อัตโนมัติ
+      const batch = db.batch();
+      WARDS.forEach((w, i) => batch.set(db.collection('wards').doc(), { name: w, order: i }));
+      batch.commit().catch(e => console.error('Ward seed error:', e));
+      return;
+    }
+    WARDS = snap.docs.map(doc => doc.data()).sort((a,b) => (a.order ?? 9e15) - (b.order ?? 9e15)).map(x => x.name);
+    const oi = WARDS.indexOf('อื่นๆ');
+    if (oi > -1) WARDS.push(WARDS.splice(oi, 1)[0]); // "อื่นๆ" อยู่ท้ายเสมอ
+    state.wards = WARDS;
+    render();
+  }, err => console.error('Wards listener error:', err));
+
   db.collection('settings').doc('admin').onSnapshot(doc => {
     if (doc.exists && doc.data().password) ADMIN_PW = doc.data().password;
     else db.collection('settings').doc('admin').set({ password: ADMIN_PW });
@@ -150,6 +166,48 @@ async function deleteDoctor(docId) {
     render();
   } catch(e) {
     console.error('Error deleting doctor:', e);
+  }
+}
+
+async function addWard(name) {
+  if (!name.trim()) return;
+  if (WARDS.includes(name.trim())) {
+    state.toast = 'มีหน่วยงานชื่อนี้อยู่แล้ว';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { state.toast = ''; render(); }, 2000);
+    render();
+    return;
+  }
+  try {
+    await db.collection('wards').add({ name: name.trim(), order: Date.now() });
+    state.toast = 'เพิ่มหน่วยงานสำเร็จ';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { state.toast = ''; render(); }, 2000);
+    render();
+  } catch(e) {
+    console.error('Error adding ward:', e);
+    state.toast = 'เกิดข้อผิดพลาด';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { state.toast = ''; render(); }, 2000);
+    render();
+  }
+}
+
+function addWardClick() {
+  const inp = document.getElementById('admin-ward-input');
+  if (inp) addWard(inp.value);
+}
+
+function removeWard(i) {
+  const name = (state.wards.length ? state.wards : WARDS)[i];
+  if (!name) return;
+  if (confirm('ลบหน่วยงาน "' + name + '" ใช่หรือไม่?')) {
+    db.collection('wards').where('name','==',name).limit(1).get().then(snap=>{
+      snap.docs.forEach(doc=>doc.ref.delete());
+      state.toast = 'ลบหน่วยงานสำเร็จ';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { state.toast = ''; render(); }, 2000);
+    });
   }
 }
 
@@ -548,9 +606,14 @@ function buildAdmin() {
       <button onclick="removeDoctor('${docId}')" style="padding:6px 12px;border:1px solid #d6dee6;border-radius:8px;background:#fff;color:#c0392b;font-size:12px;font-weight:600;cursor:pointer" onmouseover="this.style.background='#fdf3f3'" onmouseout="this.style.background='#fff'">ลบ</button>
     </div>`;
   }).join('');
+  const wards = state.wards.length ? state.wards : WARDS;
+  const wardRows = wards.map((w, i) => `<div style="display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid #e3e8ee">
+      <span style="flex:1;font-size:14px">${esc(w)}</span>
+      <button onclick="removeWard(${i})" style="padding:6px 12px;border:1px solid #d6dee6;border-radius:8px;background:#fff;color:#c0392b;font-size:12px;font-weight:600;cursor:pointer" onmouseover="this.style.background='#fdf3f3'" onmouseout="this.style.background='#fff'">ลบ</button>
+    </div>`).join('');
 
   return `<div>
-    <div style="margin-bottom:22px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">⚙️ Admin Panel</h1><p style="margin:0;font-size:14px;color:#6b7787">จัดการรายชื่อแพทย์และระบบ</p></div><button onclick="adminLogout()" style="padding:9px 16px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:13px;font-weight:600;cursor:pointer">🔓 ออกจากระบบ</button></div>
+    <div style="margin-bottom:22px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h1 style="margin:0 0 4px;font-size:24px;font-weight:700;letter-spacing:-.4px">⚙️ Admin Panel</h1><p style="margin:0;font-size:14px;color:#6b7787">จัดการรายชื่อแพทย์ หน่วยงาน และระบบ</p></div><button onclick="adminLogout()" style="padding:9px 16px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:13px;font-weight:600;cursor:pointer">🔓 ออกจากระบบ</button></div>
     <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04)">
       <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:18px">เพิ่มแพทย์ใหม่</div>
       <div style="display:flex;gap:10px;margin-bottom:20px">
@@ -559,6 +622,15 @@ function buildAdmin() {
       </div>
       <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:12px">รายชื่อแพทย์ (${doctors.length})</div>
       ${docRows}
+    </div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04);margin-top:18px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:18px">เพิ่มหน่วยงาน / หอผู้ป่วยใหม่</div>
+      <div style="display:flex;gap:10px;margin-bottom:20px">
+        <input id="admin-ward-input" type="text" placeholder="ชื่อหน่วยงาน (เช่น หอผู้ป่วยเด็ก)" style="flex:1;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none">
+        <button onclick="addWardClick()" style="padding:11px 24px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer">+ เพิ่ม</button>
+      </div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:12px">รายชื่อหน่วยงาน (${wards.length})</div>
+      ${wardRows}
     </div>
     <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04);margin-top:18px">
       <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:14px">🔑 เปลี่ยนรหัสผ่าน Admin</div>
