@@ -599,9 +599,9 @@ function buildReport() {
   const resolved=adm+nu, util=resolved?Math.round(adm/resolved*100):0;
   const kpis=[
     {label:mode==='year'?'จองทั้งปีงบฯ':'จองทั้งเดือน',value:total,sub:'ราย',color:'#15202b'},
-    {label:'เข้า ICU',value:adm,sub:'ราย',color:'#0e8a5a'},
-    {label:'ไม่ได้เข้า ICU',value:nu,sub:'ราย',color:'#c0392b'},
-    {label:'อัตราการใช้เตียง',value:util+'%',sub:'จากที่สรุปผลแล้ว',color:'var(--accent)'}
+    {label:'เข้า ICU',value:adm,sub:resolved?'ราย · คิดเป็น '+util+'%':'ราย',color:'#0e8a5a'},
+    {label:'ไม่ได้เข้า ICU',value:nu,sub:resolved?'ราย · คิดเป็น '+(100-util)+'%':'ราย',color:'#c0392b'},
+    {label:'อัตราการเข้า ICU',value:util+'%',sub:'ไม่ได้เข้า '+(resolved?100-util:0)+'% · จากที่สรุปผลแล้ว',color:'var(--accent)'}
   ];
   const kpiHtml=kpis.map(k=>`<div style="background:#fff;border:1px solid #e3e8ee;border-radius:15px;padding:18px 20px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:12.5px;font-weight:600;color:#8693a1">${k.label}</div><div style="font-size:30px;font-weight:700;letter-spacing:-1px;margin-top:6px;color:${k.color}">${k.value}</div><div style="font-size:12px;color:#9aa6b2;margin-top:2px">${k.sub}</div></div>`).join('');
 
@@ -614,7 +614,21 @@ function buildReport() {
   const barRow=(b)=>`<div style="display:flex;align-items:center;gap:12px"><div style="width:150px;font-size:12.5px;color:#33414f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.label)}</div><div style="flex:1;height:12px;background:#eef1f4;border-radius:99px;overflow:hidden"><div style="height:100%;width:${b.pct};background:${b.color};border-radius:99px"></div></div><div style="width:28px;text-align:right;font-weight:700;font-size:13px">${b.value}</div></div>`;
   const barRowW=(b,w)=>`<div style="display:flex;align-items:center;gap:12px"><div style="width:${w}px;font-size:12.5px;color:#33414f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.label)}</div><div style="flex:1;height:12px;background:#eef1f4;border-radius:99px;overflow:hidden"><div style="height:100%;width:${b.pct};background:${b.color};border-radius:99px"></div></div><div style="width:28px;text-align:right;font-weight:700;font-size:13px">${b.value}</div></div>`;
 
-  const wardBars=toBars(countBy(md,b=>b.ward),'var(--accent)').map(b=>barRow(b)).join('');
+  // หน่วยงาน: จำนวน + % ส่วนแบ่ง + ผลเข้า/ไม่เข้า ICU ของแต่ละ ward (แถบเขียว=เข้า แดง=ไม่เข้า เทา=รอผล)
+  const wardStats=Object.entries(countBy(md,b=>b.ward)).map(([w,c])=>{
+    const wl=md.filter(b=>b.ward===w);
+    const a=wl.filter(b=>b.status==='admitted').length, n=wl.filter(b=>b.status==='not_used').length;
+    const res=a+n, ap=res?Math.round(a/res*100):0;
+    return {w,c,a,n,res,ap,np:res?100-ap:0,share:total?Math.round(c/total*100):0};
+  }).sort((x,y)=>y.c-x.c);
+  const wardBars=wardStats.map(s=>`<div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:5px">
+        <span style="font-size:12.5px;font-weight:600;color:#33414f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.w)}</span>
+        <span style="font-size:12.5px;font-weight:700;white-space:nowrap">${s.c} ราย · ${s.share}%</span>
+      </div>
+      <div style="height:11px;border-radius:99px;background:#eef1f4;overflow:hidden;display:flex">${s.a?`<div style="width:${Math.round(s.a/s.c*100)}%;background:#0e8a5a"></div>`:''}${s.n?`<div style="width:${Math.round(s.n/s.c*100)}%;background:#c0392b"></div>`:''}</div>
+      <div style="font-size:11.5px;margin-top:4px">${s.res?`<span style="color:#0e8a5a;font-weight:700">เข้า ICU ${s.a} (${s.ap}%)</span> · <span style="color:#c0392b;font-weight:700">ไม่เข้า ${s.n} (${s.np}%)</span>${s.c-s.res?` · <span style="color:#9aa6b2">รอผล ${s.c-s.res}</span>`:''}`:`<span style="color:#9aa6b2">ยังไม่มีเคสสรุปผล</span>`}</div>
+    </div>`).join('');
   const diagBars=toBars(countBy(md,b=>b.diagnosis),'#1d6fb8').slice(0,7).map(b=>barRowW(b,160)).join('');
   const doctorBars=toBars(countBy(md,b=>b.doctor),'#5b53c9').slice(0,7).map(b=>barRowW(b,130)).join('');
   const reasonBars=toBars(countBy(md.filter(b=>b.status==='not_used'),b=>b.notUsedReason),'#c0392b');
@@ -623,6 +637,26 @@ function buildReport() {
   const specTotal=auryCount+surgCount, auryPct=specTotal?Math.round(auryCount/specTotal*100):0, surgPct=specTotal?100-auryPct:0;
   const donutStyle=specTotal?`conic-gradient(#1d6fb8 0 ${auryPct}%, #d97706 ${auryPct}% 100%)`:'#eef1f4';
 
+  // ข้อความ เข้า/ไม่เข้า ของแต่ละสาขา (ช่วงที่เลือก)
+  const specRateTxt=(sp)=>{const l=md.filter(b=>b.specialty===sp);const a=l.filter(b=>b.status==='admitted').length,n=l.filter(b=>b.status==='not_used').length,res=a+n;const ap=res?Math.round(a/res*100):0;return res?`<span style="color:#0e8a5a;font-weight:700">เข้า ${a} (${ap}%)</span> · <span style="color:#c0392b;font-weight:700">ไม่เข้า ${n} (${100-ap}%)</span>`:'<span style="color:#9aa6b2">ยังไม่มีเคสสรุปผล</span>';};
+
+  // อัตราเข้า ICU แยกสาขา — รายเดือน / รายไตรมาส (คำนวณจากข้อมูลทุกช่วง)
+  const rateBox=(list)=>{
+    const a=list.filter(b=>b.status==='admitted').length, n=list.filter(b=>b.status==='not_used').length, tot=list.length;
+    if(!tot) return '<div style="font-size:12px;color:#c3ccd6">— ไม่มีเคส</div>';
+    const res=a+n, ap=res?Math.round(a/res*100):0, np=res?100-ap:0;
+    return `<div style="height:10px;border-radius:99px;background:#eef1f4;overflow:hidden;display:flex">${a?`<div style="width:${Math.round(a/tot*100)}%;background:#0e8a5a"></div>`:''}${n?`<div style="width:${Math.round(n/tot*100)}%;background:#c0392b"></div>`:''}</div><div style="font-size:11.5px;margin-top:4px">${res?`<span style="color:#0e8a5a;font-weight:700">เข้า ${a} (${ap}%)</span> · <span style="color:#c0392b;font-weight:700">ไม่เข้า ${n} (${np}%)</span>${tot-res?` · <span style="color:#9aa6b2">รอ ${tot-res}</span>`:''}`:`<span style="color:#9aa6b2">รอสรุป ${tot} ราย</span>`}</div>`;
+  };
+  const rateHead=`<div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:14px;padding-bottom:8px"><div></div><div style="font-size:12px;font-weight:700;color:#1d6fb8">อายุรกรรม</div><div style="font-size:12px;font-weight:700;color:#d97706">ศัลยกรรม</div></div>`;
+  const rateRow=(label,list)=>`<div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:14px;align-items:center;padding:11px 0;border-top:1px solid #f0f3f6"><div style="font-size:12.5px;font-weight:700;color:#33414f">${label}</div><div>${rateBox(list.filter(b=>b.specialty==='อายุรกรรม'))}</div><div>${rateBox(list.filter(b=>b.specialty==='ศัลยกรรม'))}</div></div>`;
+  const monthRateRows=allMonths.map(m=>rateRow(mLabel(m),bk.filter(b=>monthOf(b)===m))).join('');
+  const allFYr=[...new Set(bk.map(b=>fyOf(monthOf(b))))].sort((a,b)=>a-b);
+  const fyRateRows=allFYr.map(fy=>rateRow(`ปีงบฯ ${fy+543}<div style="font-size:10.5px;font-weight:500;color:#9aa6b2">ต.ค. ${fy-1+543} – ก.ย. ${fy+543}</div>`,bk.filter(b=>fyOf(monthOf(b))===fy))).join('');
+  const specRateSection=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;margin-bottom:18px">
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:4px">อัตราเข้า ICU แยกสาขา — รายเดือน</div><div style="font-size:12.5px;color:#9aa6b2;margin-bottom:14px">🟢 เข้า ICU · 🔴 ไม่ได้เข้า — % คิดจากเคสที่สรุปผลแล้ว</div>${rateHead}${monthRateRows}</div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:4px">อัตราเข้า ICU แยกสาขา — รายปีงบประมาณ</div><div style="font-size:12.5px;color:#9aa6b2;margin-bottom:14px">ปีงบประมาณไทย (ต.ค.–ก.ย.)</div>${rateHead}${fyRateRows}</div>
+  </div>`;
+
   const planCount=md.filter(b=>b.planType==='Plan icu').length, unplanCount=md.filter(b=>b.planType==='unplan icu').length;
   const planAdm=md.filter(b=>b.planType==='Plan icu'&&b.status==='admitted').length, unplanAdm=md.filter(b=>b.planType==='unplan icu'&&b.status==='admitted').length;
   const planTotal=planCount+unplanCount, planPct=planTotal?Math.round(planCount/planTotal*100):0, unplanPct=planTotal?100-planPct:0;
@@ -630,7 +664,7 @@ function buildReport() {
 
   const dataSection=total>0?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:18px">
     <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">จำนวนผู้ป่วยแยกตามหน่วยงาน</div><div style="display:flex;flex-direction:column;gap:12px">${wardBars}</div></div>
-    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">แยกตามสาขา (อายุรกรรม / ศัลยกรรม)</div><div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap"><div style="width:128px;height:128px;border-radius:50%;background:${donutStyle};position:relative;flex:none"><div style="position:absolute;inset:19px;background:#fff;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:24px;font-weight:700;line-height:1">${specTotal}</div><div style="font-size:11px;color:#9aa6b2">ราย</div></div></div><div style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:14px"><div><div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:3px;background:#1d6fb8;flex:none"></span><span style="font-size:13.5px;font-weight:600">อายุรกรรม</span></div><div style="font-size:13px;color:#6b7787;margin-left:20px">${auryCount} ราย · ${auryPct}%</div></div><div><div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:3px;background:#d97706;flex:none"></span><span style="font-size:13.5px;font-weight:600">ศัลยกรรม</span></div><div style="font-size:13px;color:#6b7787;margin-left:20px">${surgCount} ราย · ${surgPct}%</div></div></div></div></div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">แยกตามสาขา (อายุรกรรม / ศัลยกรรม)</div><div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap"><div style="width:128px;height:128px;border-radius:50%;background:${donutStyle};position:relative;flex:none"><div style="position:absolute;inset:19px;background:#fff;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:24px;font-weight:700;line-height:1">${specTotal}</div><div style="font-size:11px;color:#9aa6b2">ราย</div></div></div><div style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:14px"><div><div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:3px;background:#1d6fb8;flex:none"></span><span style="font-size:13.5px;font-weight:600">อายุรกรรม</span></div><div style="font-size:13px;color:#6b7787;margin-left:20px">${auryCount} ราย · ${auryPct}%</div><div style="font-size:12px;margin-left:20px;margin-top:3px">${specRateTxt('อายุรกรรม')}</div></div><div><div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:3px;background:#d97706;flex:none"></span><span style="font-size:13.5px;font-weight:600">ศัลยกรรม</span></div><div style="font-size:13px;color:#6b7787;margin-left:20px">${surgCount} ราย · ${surgPct}%</div><div style="font-size:12px;margin-left:20px;margin-top:3px">${specRateTxt('ศัลยกรรม')}</div></div></div></div></div>
     <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">Plan / Unplan ICU</div><div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap"><div style="width:128px;height:128px;border-radius:50%;background:${planDonut};position:relative;flex:none"><div style="position:absolute;inset:19px;background:#fff;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:24px;font-weight:700;line-height:1">${planTotal}</div><div style="font-size:11px;color:#9aa6b2">ราย</div></div></div><div style="flex:1;min-width:150px;display:flex;flex-direction:column;gap:14px"><div><div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:3px;background:#0f766e;flex:none"></span><span style="font-size:13.5px;font-weight:600">Plan ICU</span></div><div style="font-size:13px;color:#6b7787;margin-left:20px">${planCount} ราย · ${planPct}% <span style="color:#0e8a5a">(เข้า ICU ${planAdm})</span></div></div><div><div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:3px;background:#c0392b;flex:none"></span><span style="font-size:13.5px;font-weight:600">Unplan ICU</span></div><div style="font-size:13px;color:#6b7787;margin-left:20px">${unplanCount} ราย · ${unplanPct}% <span style="color:#0e8a5a">(เข้า ICU ${unplanAdm})</span></div></div></div></div></div>
     <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">Diagnosis ที่พบบ่อย</div><div style="display:flex;flex-direction:column;gap:12px">${diagBars}</div></div>
     <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:22px 24px;box-shadow:0 1px 3px rgba(20,32,43,.04)"><div style="font-size:15px;font-weight:700;margin-bottom:18px">สถิติแพทย์เจ้าของไข้</div><div style="display:flex;flex-direction:column;gap:12px">${doctorBars}</div></div>
@@ -666,6 +700,7 @@ function buildReport() {
     <div style="font-size:12.5px;color:#9aa6b2;margin-bottom:18px">เปรียบเทียบจำนวนการจองเตียง ICU แยกรายเดือน</div>
     <div style="display:flex;align-items:flex-end;gap:16px">${trendBars}</div>
   </div>
+  ${specRateSection}
   ${dataSection}
 </div>`;
 }
@@ -1016,7 +1051,7 @@ function reportHTML() {
   const sortKV=(fn,src)=>{ const m=countBy(src||list,fn); return Object.keys(m).map(k=>({k,v:m[k]})).sort((a,b)=>b.v-a.v); };
   const kv=(arr)=>arr.map(x=>'<tr><td>'+x.k+'</td><td style="text-align:center">'+x.v+'</td></tr>').join('');
   const statusTh={pending:'รอรับจอง',accepted:'รับจองแล้ว',admitted:'เข้า ICU แล้ว',not_used:'ไม่ได้เข้า ICU'};
-  const summary='<tr><td>จำนวนการจองทั้งหมด</td><td style="text-align:center">'+total+'</td></tr><tr><td>เข้า ICU</td><td style="text-align:center">'+adm+'</td></tr><tr><td>ไม่ได้เข้า ICU</td><td style="text-align:center">'+nu+'</td></tr><tr><td>รับจองแล้ว (รอสรุปผล)</td><td style="text-align:center">'+accpt+'</td></tr><tr><td>รอรับจอง</td><td style="text-align:center">'+pend+'</td></tr><tr><td>อัตราการเข้า ICU</td><td style="text-align:center">'+util+'%</td></tr>';
+  const summary='<tr><td>จำนวนการจองทั้งหมด</td><td style="text-align:center">'+total+'</td></tr><tr><td>เข้า ICU</td><td style="text-align:center">'+adm+'</td></tr><tr><td>ไม่ได้เข้า ICU</td><td style="text-align:center">'+nu+'</td></tr><tr><td>รับจองแล้ว (รอสรุปผล)</td><td style="text-align:center">'+accpt+'</td></tr><tr><td>รอรับจอง</td><td style="text-align:center">'+pend+'</td></tr><tr><td>อัตราการเข้า ICU</td><td style="text-align:center">'+util+'%</td></tr><tr><td>อัตราไม่ได้เข้า ICU</td><td style="text-align:center">'+((adm+nu)?100-util:0)+'%</td></tr>';
   const specRows='<tr><td>อายุรกรรม</td><td style="text-align:center">'+aury+'</td></tr><tr><td>ศัลยกรรม</td><td style="text-align:center">'+surg+'</td></tr>';
   const planAll=list.filter(b=>b.planType==='Plan icu').length, unplanAll=list.filter(b=>b.planType==='unplan icu').length;
   const planAdmC=list.filter(b=>b.planType==='Plan icu'&&b.status==='admitted').length, unplanAdmC=list.filter(b=>b.planType==='unplan icu'&&b.status==='admitted').length;
@@ -1057,6 +1092,7 @@ function reportExcel() {
   wsData.push(['เข้า ICU',adm]);
   wsData.push(['ไม่ได้เข้า ICU',nu]);
   wsData.push(['อัตราการเข้า ICU',util+'%']);
+  wsData.push(['อัตราไม่ได้เข้า ICU',((adm+nu)?100-util:0)+'%']);
   wsData.push([]);
 
   wsData.push(['จำนวนผู้ป่วยแยกตามหน่วยงาน']);
