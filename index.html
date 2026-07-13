@@ -465,6 +465,7 @@ function buildQueueCard(b, no) {
         <button data-moveup="${b.id}" title="เลื่อนคิวขึ้น" style="width:34px;height:34px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:15px;cursor:pointer">↑</button>
         <button data-movedown="${b.id}" title="เลื่อนคิวลง" style="width:34px;height:34px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:15px;cursor:pointer">↓</button>
         <button data-accept="${b.id}" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-size:13.5px;font-weight:700;cursor:pointer">✓ รับจอง ICU</button>
+        <button data-del="${b.id}" title="ยกเลิกการจอง (กรณี ward กรอกข้อมูลผิด)" style="padding:9px 13px;border:1px solid #f0c9c9;border-radius:9px;background:#fff;color:#c0392b;font-size:12.5px;font-weight:600;cursor:pointer">🗑️ ยกเลิกจอง</button>
       </div>`;
   } else if (b.status==='accepted') {
     actionRow=`
@@ -473,9 +474,12 @@ function buildQueueCard(b, no) {
       <span style="font-size:12.5px;color:#9aa6b2;font-weight:600">พยาบาลผู้สรุป</span>
       <select data-summary="${b.id}" style="padding:8px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:13px;background:#fff;color:#15202b;outline:none;min-width:150px">${nurseOpts(b.summaryNurse||'')}</select>
       <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button data-moveup="${b.id}" title="เลื่อนคิวขึ้น (ในวันเดียวกัน)" style="width:34px;height:34px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:15px;cursor:pointer">↑</button>
+        <button data-movedown="${b.id}" title="เลื่อนคิวลง (ในวันเดียวกัน)" style="width:34px;height:34px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:15px;cursor:pointer">↓</button>
         <button data-admit="${b.id}" style="display:inline-flex;align-items:center;gap:6px;padding:9px 17px;border:none;border-radius:9px;background:#0e8a5a;color:#fff;font-size:13.5px;font-weight:700;cursor:pointer">✓ เข้า ICU</button>
         <select data-reason="${b.id}" style="padding:9px 11px;border:1px solid #f0c9c9;border-radius:9px;font-size:13px;background:#fff;color:#c0392b;outline:none;font-weight:500"><option value="">ไม่ได้เข้า ICU — เลือกเหตุผล</option>${reasonOpts}</select>
         <button data-revert="${b.id}" style="padding:7px 13px;border:1px solid #d6dee6;border-radius:9px;background:#fff;color:#5d6b7a;font-size:12.5px;font-weight:600;cursor:pointer">คืนสู่รอรับจอง</button>
+        <button data-del="${b.id}" title="ยกเลิกการจอง (กรณี ward กรอกข้อมูลผิด)" style="padding:7px 13px;border:1px solid #f0c9c9;border-radius:9px;background:#fff;color:#c0392b;font-size:12.5px;font-weight:600;cursor:pointer">🗑️ ยกเลิกจอง</button>
       </div>`;
   } else if (b.status==='admitted') {
     actionRow=`
@@ -516,15 +520,16 @@ function buildQueueCard(b, no) {
 }
 
 function schedDateOf(b) { return (b.specialty==='ศัลยกรรม'?(b.surgeryDate||b.bookingDate):(b.bookingDate||b.surgeryDate))||''; }
+function posOf(b) { return b.queuePos ?? b.bookedAt ?? 0; } // ลำดับคิว — ค่าเริ่มต้นตามเวลาจอง, เลื่อนคิวจะสลับค่านี้ (บันทึกถาวร)
 
 function queueFilterList() {
   const bk=state.bookings;
-  let pend=bk.filter(b=>b.status==='pending');
-  // คิวจอง: จัดกลุ่มตามวันจอง/วันผ่าตัด — วันเดียวกันใครกดจองเข้าระบบก่อนได้คิวก่อน และนับเลขคิวแยกรายวัน (คิว 1 เริ่มใหม่ทุกวัน)
+  let pend=bk.filter(b=>b.status==='pending').sort((a,b)=>posOf(a)-posOf(b));
+  // คิวจอง: จัดกลุ่มตามวันจอง/วันผ่าตัด — วันเดียวกันใครกดจองเข้าระบบก่อนได้คิวก่อน (admin เลื่อนคิวได้) และนับเลขคิวแยกรายวัน
   const acc=bk.filter(b=>b.status==='accepted').sort((a,b)=>{
     const da=schedDateOf(a)||'9999', db2=schedDateOf(b)||'9999';
     if (da!==db2) return da<db2?-1:1;
-    return (a.bookedAt||0)-(b.bookedAt||0);
+    return posOf(a)-posOf(b);
   });
   const noMap={}; pend.forEach((b,i)=>{noMap[b.id]=i+1;});
   const dayCnt={}; acc.forEach(b=>{const d=schedDateOf(b)||'-'; dayCnt[d]=(dayCnt[d]||0)+1; noMap[b.id]=dayCnt[d];});
@@ -1064,6 +1069,9 @@ function bindQueueCardEvents() {
   // Move up/down
   app.querySelectorAll('[data-moveup]').forEach(btn=>btn.addEventListener('click',e=>{ moveQueue(e.currentTarget.dataset.moveup,-1); }));
   app.querySelectorAll('[data-movedown]').forEach(btn=>btn.addEventListener('click',e=>{ moveQueue(e.currentTarget.dataset.movedown,1); }));
+
+  // ยกเลิกการจอง (ลบรายการ)
+  app.querySelectorAll('[data-del]').forEach(btn=>btn.addEventListener('click',e=>{ deleteBooking(e.currentTarget.dataset.del); }));
 }
 
 // ─── HANDLERS ────────────────────────────────────────────────────────────────
@@ -1073,15 +1081,30 @@ function updateBooking(id, patch) {
 }
 
 function moveQueue(id, dir) {
-  const arr=[...state.bookings];
-  const pend=arr.map((b,idx)=>({b,idx})).filter(x=>x.b.status==='pending');
-  const pi=pend.findIndex(x=>String(x.b.id)===String(id));
-  const tj=pi+dir;
-  if (pi<0||tj<0||tj>=pend.length) return;
-  const a=pend[pi].idx, c=pend[tj].idx;
-  [arr[a],arr[c]]=[arr[c],arr[a]];
-  state.bookings=arr;
+  const b=state.bookings.find(x=>String(x.id)===String(id));
+  if (!b) return;
+  // กลุ่มที่เลื่อนได้: รอรับจอง = ทั้งกระดาน / คิวจอง = เฉพาะเคสวันเดียวกัน (เลขคิวนับรายวัน)
+  let group;
+  if (b.status==='pending') group=state.bookings.filter(x=>x.status==='pending').sort((x,y)=>posOf(x)-posOf(y));
+  else if (b.status==='accepted') group=state.bookings.filter(x=>x.status==='accepted'&&schedDateOf(x)===schedDateOf(b)).sort((x,y)=>posOf(x)-posOf(y));
+  else return;
+  const i=group.findIndex(x=>String(x.id)===String(id)), j=i+dir;
+  if (i<0||j<0||j>=group.length) return;
+  const other=group[j], pa=posOf(b), pb=posOf(other);
+  if (pa===pb) return;
+  state.bookings=state.bookings.map(x=>String(x.id)===String(b.id)?{...x,queuePos:pb}:String(x.id)===String(other.id)?{...x,queuePos:pa}:x);
   persist();
+  render();
+}
+
+function deleteBooking(id) {
+  const b=state.bookings.find(x=>String(x.id)===String(id));
+  if (!b) return;
+  if (!confirm('ยกเลิกการจองของ "'+b.prefix+' '+b.firstName+' '+b.lastName+'" (HN '+b.hn+') ใช่หรือไม่?\n\nรายการนี้จะถูกลบออกจากระบบถาวร — ward สามารถจองใหม่ได้ทันที')) return;
+  state.bookings=state.bookings.filter(x=>String(x.id)!==String(id));
+  persist();
+  state.toast='ยกเลิกการจองเรียบร้อย — ward จองใหม่ได้เลย';
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>{state.toast='';render();},3200);
   render();
 }
 
