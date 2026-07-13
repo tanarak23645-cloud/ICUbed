@@ -391,8 +391,8 @@ function buildBook() {
   const specBtns=['อายุรกรรม','ศัลยกรรม'].map(v=>segBtn(v,f.specialty===v,`data-pick="specialty" data-val="${v}"`)).join('');
   const planBtns=[{v:'Plan icu',l:'Plan ICU'},{v:'unplan icu',l:'Unplan ICU'}].map(o=>segBtn(o.l,f.planType===o.v,`data-pick="planType" data-val="${esc(o.v)}"`)).join('');
   let dateField='';
-  if (f.specialty==='ศัลยกรรม') dateField=`<div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">วันผ่าตัด <span style="font-weight:400;color:#9aa6b2">(เฉพาะศัลยกรรม)</span></label><input name="surgeryDate" value="${esc(f.surgeryDate)}" type="date" style="width:100%;padding:10px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none"></div>`;
-  else if (f.specialty==='อายุรกรรม') dateField=`<div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">วันจองเตียง <span style="font-weight:400;color:#9aa6b2">(เฉพาะอายุรกรรม)</span></label><input name="bookingDate" value="${esc(f.bookingDate)}" type="date" style="width:100%;padding:10px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none"></div>`;
+  if (f.specialty==='ศัลยกรรม') dateField=`<div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">วันผ่าตัด <span style="color:#d64545">*</span> <span style="font-weight:400;color:#9aa6b2">(เฉพาะศัลยกรรม)</span></label><input name="surgeryDate" value="${esc(f.surgeryDate)}" type="date" style="width:100%;padding:10px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none"></div>`;
+  else if (f.specialty==='อายุรกรรม') dateField=`<div><label style="display:block;font-size:13px;font-weight:600;color:#33414f;margin-bottom:7px">วันจองเตียง <span style="color:#d64545">*</span> <span style="font-weight:400;color:#9aa6b2">(เฉพาะอายุรกรรม)</span></label><input name="bookingDate" value="${esc(f.bookingDate)}" type="date" style="width:100%;padding:10px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none"></div>`;
   const errHtml=state.formError?`<div style="margin-top:18px;padding:11px 14px;background:#fdecec;border:1px solid #f3c9c9;border-radius:10px;color:#b02a2a;font-size:13.5px;font-weight:500">${esc(state.formError)}</div>`:'';
   const inp=(name,val,ph,extra='')=>`<input name="${name}" value="${esc(val)}" placeholder="${ph}" ${extra} style="width:100%;padding:11px 12px;border:1px solid #d6dee6;border-radius:9px;font-size:14px;background:#fff;color:#15202b;outline:none">`;
   return `<div>
@@ -444,7 +444,7 @@ function buildQueueCard(b, no) {
   const oncallBadge=oncall?badge('#fff3df','#b7791f','On call'):'';
   const statusBadge=badge(sbg,sfg,slbl);
   const dateLabel=aury?'วันจอง':'วันผ่าตัด', dateText=fmtDate(aury?b.bookingDate:b.surgeryDate);
-  const procRow=b.procedure&&b.procedure.trim()?`<div><span style="color:#9aa6b2">หัตถการ</span> &nbsp;${esc(b.procedure)}</div>`:'';
+  const procLine=b.procedure&&b.procedure.trim()?`<div style="margin-top:4px;font-size:13.5px"><span style="color:#9aa6b2;font-weight:600">หัตถการ</span> <span style="font-weight:700;color:#b45309">${esc(b.procedure)}</span></div>`:'';
   const acceptedBy=b.nurse?('รับจองโดย '+b.nurse):'ยังไม่ระบุผู้รับจอง';
   const reasonOpts=REASONS.map(r=>`<option value="${esc(r)}"${b.notUsedReason===r?' selected':''}>${esc(r)}</option>`).join('');
   // dropdown พยาบาล ICU — ถ้าค่าเดิมไม่อยู่ในรายชื่อ (ข้อมูลเก่า) ให้แทรกไว้บนสุดเพื่อไม่ให้ค่าหาย
@@ -504,13 +504,13 @@ function buildQueueCard(b, no) {
         <span style="font-size:12.5px;color:#8693a1;font-family:'IBM Plex Mono',monospace">HN ${esc(b.hn)} · ${b.age} ปี</span>
       </div>
       <div style="margin-top:5px;font-size:14px;color:#33414f;font-weight:500">${esc(b.diagnosis)}</div>
+      ${procLine}
       <div style="margin-top:7px;display:flex;gap:7px;flex-wrap:wrap">${specBadge}${planBadge}${oncallBadge}${statusBadge}</div>
     </div>
     <div style="min-width:200px;font-size:13px;color:#5d6b7a;line-height:1.75">
       <div><span style="color:#9aa6b2">หน่วยงาน</span> &nbsp;${esc(b.ward)}</div>
       <div><span style="color:#9aa6b2">แพทย์</span> &nbsp;${esc(b.doctor)}</div>
       <div><span style="color:#9aa6b2">${dateLabel}</span> &nbsp;${dateText} · ${esc(b.time)}</div>
-      ${procRow}
     </div>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-top:1px dashed #e6ebf0;padding-top:14px;margin-top:14px">
@@ -1112,6 +1112,8 @@ function handleSubmit() {
   const f=state.form;
   const req=[['ward','หน่วยงาน'],['doctor','แพทย์เจ้าของไข้'],['hn','HN'],['prefix','คำนำหน้า'],['firstName','ชื่อ'],['lastName','สกุล'],['age','อายุ'],['diagnosis','Diagnosis'],['specialty','สาขา'],['time','เวลา'],['planType','Plan/Unplan']];
   const miss=req.filter(r=>!String(f[r[0]]||'').trim()).map(r=>r[1]);
+  if (f.specialty==='ศัลยกรรม'&&!String(f.surgeryDate||'').trim()) miss.push('วันผ่าตัด');
+  if (f.specialty==='อายุรกรรม'&&!String(f.bookingDate||'').trim()) miss.push('วันจองเตียง');
   if (miss.length) { state.formError='กรุณากรอก: '+miss.join(', '); render(); return; }
   const now=Date.now();
   state.bookings=[...state.bookings,{...f,id:now,status:'pending',notUsedReason:'',nurse:'',summaryNurse:'',month:monthOf(f),bookedAt:now,acceptedAt:0}];
