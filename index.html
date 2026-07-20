@@ -171,10 +171,15 @@ function setupRealtimeListener() {
     const d = doc.exists ? doc.data() : {};
     if (d.password) ADMIN_PW = d.password;
     if (d.superPassword) SUPER_PW = d.superPassword;
+    // seed ค่าเริ่มต้นเฉพาะเมื่อยืนยันกับเซิร์ฟเวอร์แล้วจริงๆ ว่าไม่มีข้อมูล (ห้าม seed จาก cache ตอนเน็ตสะดุด — จะเขียนทับรหัสจริง)
+    if (doc.metadata.fromCache) return;
     const miss = {};
     if (!d.password) miss.password = ADMIN_PW;
     if (!d.superPassword) miss.superPassword = SUPER_PW;
-    if (Object.keys(miss).length) db.collection('settings').doc('admin').set(miss, { merge: true });
+    if (Object.keys(miss).length) {
+      db.collection('settings').doc('admin').set(miss, { merge: true });
+      logAction('ตั้งรหัสผ่านเริ่มต้นอัตโนมัติ (seed)', Object.keys(miss).join(', '));
+    }
   }, err => console.error('Settings listener error:', err));
 }
 
@@ -904,9 +909,19 @@ async function clearAllBookings() {
   }
 }
 
-function checkAdminPw() {
+async function checkAdminPw() {
   const inp = document.getElementById('admin-pw-input');
-  if (inp && inp.value === ADMIN_PW) {
+  if (!inp) return;
+  const typed = inp.value.trim();
+  // ดึงรหัสจริงจากเซิร์ฟเวอร์ก่อนเทียบเสมอ — กันกรณีหน้าเพิ่งโหลดแล้วรหัสในเครื่องยังเป็นค่าเริ่มต้น
+  try {
+    const doc = await db.collection('settings').doc('admin').get();
+    if (doc.exists) {
+      if (doc.data().password) ADMIN_PW = doc.data().password;
+      if (doc.data().superPassword) SUPER_PW = doc.data().superPassword;
+    }
+  } catch(e) { console.error('PW fetch error:', e); }
+  if (typed === ADMIN_PW) {
     state.adminAuthed = true;
     state.adminPwError = '';
     sessionStorage.setItem('icu_admin_auth', '1');
