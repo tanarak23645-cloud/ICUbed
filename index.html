@@ -67,6 +67,7 @@ let state = {
   doctors: [],
   wards: [],
   nurses: [],
+  logs: [],
   adminNewDoctor: '',
   adminAuthed: sessionStorage.getItem('icu_admin_auth')==='1',
   adminPwError: '',
@@ -84,6 +85,18 @@ let toastTimer = null;
 
 function blankForm() {
   return {ward:'',doctor:'',hn:'',prefix:'',firstName:'',lastName:'',age:'',diagnosis:'',specialty:'',procedure:'',surgeryDate:'',bookingDate:'',time:'',planType:''};
+}
+
+// ─── AUDIT LOG ───────────────────────────────────────────────────────────────
+function deviceLabel() {
+  const ua=navigator.userAgent;
+  const os=/Android/i.test(ua)?'Android':/iPhone|iPad/i.test(ua)?'iPhone/iPad':/Windows/i.test(ua)?'Windows':/Mac/i.test(ua)?'Mac':'อื่นๆ';
+  const br=/Edg\//.test(ua)?'Edge':/Chrome\//.test(ua)?'Chrome':/Firefox\//.test(ua)?'Firefox':/Safari\//.test(ua)?'Safari':'อื่นๆ';
+  return os+' · '+br;
+}
+function logAction(action, detail) {
+  try { db.collection('logs').add({ action, detail: detail||'', at: Date.now(), device: deviceLabel() }); }
+  catch(e) { console.error('Log error:', e); }
 }
 
 // ─── PERSISTENCE ─────────────────────────────────────────────────────────────
@@ -149,6 +162,11 @@ function setupRealtimeListener() {
     render();
   }, err => console.error('Nurses listener error:', err));
 
+  db.collection('logs').orderBy('at','desc').limit(50).onSnapshot(snap => {
+    state.logs = snap.docs.map(d => d.data());
+    if (state.screen === 'admin') render();
+  }, err => console.error('Logs listener error:', err));
+
   db.collection('settings').doc('admin').onSnapshot(doc => {
     const d = doc.exists ? doc.data() : {};
     if (d.password) ADMIN_PW = d.password;
@@ -164,6 +182,7 @@ async function addDoctor(name) {
   if (!name.trim()) return;
   try {
     await db.collection('doctors').add({ name: name.trim() });
+    logAction('เพิ่มแพทย์', name.trim());
     state.adminNewDoctor = '';
     state.toast = 'เพิ่มแพทย์สำเร็จ';
     clearTimeout(toastTimer);
@@ -201,6 +220,7 @@ async function addWard(name) {
   }
   try {
     await db.collection('wards').add({ name: name.trim(), order: Date.now() });
+    logAction('เพิ่มหน่วยงาน', name.trim());
     state.toast = 'เพิ่มหน่วยงานสำเร็จ';
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { state.toast = ''; render(); }, 2000);
@@ -225,6 +245,7 @@ function removeWard(i) {
   if (confirm('ลบหน่วยงาน "' + name + '" ใช่หรือไม่?')) {
     db.collection('wards').where('name','==',name).limit(1).get().then(snap=>{
       snap.docs.forEach(doc=>doc.ref.delete());
+      logAction('ลบหน่วยงาน', name);
       state.toast = 'ลบหน่วยงานสำเร็จ';
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => { state.toast = ''; render(); }, 2000);
@@ -243,6 +264,7 @@ async function addNurse(name) {
   }
   try {
     await db.collection('nurses').add({ name: name.trim(), order: Date.now() });
+    logAction('เพิ่มพยาบาล ICU', name.trim());
     state.toast = 'เพิ่มพยาบาลสำเร็จ';
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { state.toast = ''; render(); }, 2000);
@@ -267,6 +289,7 @@ function removeNurse(i) {
   if (confirm('ลบพยาบาล "' + name + '" ใช่หรือไม่?')) {
     db.collection('nurses').where('name','==',name).limit(1).get().then(snap=>{
       snap.docs.forEach(doc=>doc.ref.delete());
+      logAction('ลบพยาบาล ICU', name);
       state.toast = 'ลบพยาบาลสำเร็จ';
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => { state.toast = ''; render(); }, 2000);
@@ -795,6 +818,16 @@ function buildAdmin() {
         </div>
       </div>
     </div>
+    <div style="background:#fff;border:1px solid #e3e8ee;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04);margin-top:18px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin-bottom:6px">📜 ประวัติการแก้ไขระบบ (${(state.logs||[]).length} รายการล่าสุด)</div>
+      <p style="margin:0 0 14px;font-size:12.5px;color:#6b7787">บันทึกอัตโนมัติเมื่อมีการเปลี่ยนรหัสผ่าน ยกเลิกการจอง ลบข้อมูล หรือแก้รายชื่อ — ลบประวัติจากหน้าเว็บไม่ได้</p>
+      ${(state.logs||[]).length?`<div style="max-height:340px;overflow-y:auto;border:1px solid #e9edf2;border-radius:11px">${(state.logs||[]).map(l=>`<div style="display:flex;gap:12px;align-items:baseline;padding:10px 14px;border-bottom:1px solid #f0f3f6;font-size:12.5px;flex-wrap:wrap">
+        <span style="color:#8693a1;font-family:'IBM Plex Mono',monospace;white-space:nowrap">${new Date(l.at).toLocaleString('th-TH',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+        <span style="font-weight:700;color:${String(l.action).includes('ลบ')||String(l.action).includes('ยกเลิก')?'#c0392b':'#33414f'}">${esc(l.action)}</span>
+        <span style="color:#5d6b7a;flex:1;min-width:120px">${esc(l.detail||'')}</span>
+        <span style="color:#9aa6b2;font-size:11.5px;white-space:nowrap">${esc(l.device||'')}</span>
+      </div>`).join('')}</div>`:'<div style="font-size:13px;color:#9aa6b2">ยังไม่มีประวัติ — จะเริ่มบันทึกตั้งแต่เวอร์ชันนี้เป็นต้นไป</div>'}
+    </div>
     <div style="background:#fff;border:1px solid #f3c9c9;border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(20,32,43,.04);margin-top:18px">
       <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:#c0392b;text-transform:uppercase;margin-bottom:10px">⚠️ Danger Zone</div>
       <div style="font-size:14px;font-weight:600;margin-bottom:4px">สำรองข้อมูล / ลบข้อมูลการจองทั้งหมด (${state.bookings.length} รายการ)</div>
@@ -834,6 +867,7 @@ async function changeSuperPw() {
   try {
     await db.collection('settings').doc('admin').set({ superPassword: newPw }, { merge: true });
     SUPER_PW = newPw;
+    logAction('เปลี่ยนรหัสผ่านขั้นสูง', '');
     state.toast = 'เปลี่ยนรหัสผ่านขั้นสูงเรียบร้อย';
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { state.toast = ''; render(); }, 3200);
@@ -858,6 +892,7 @@ async function clearAllBookings() {
     const batch = db.batch();
     snap.docs.forEach(d => batch.delete(d.ref));
     await batch.commit();
+    logAction('🚨 ลบข้อมูลการจองทั้งหมด', snap.docs.length+' รายการ');
     state.bookings = [];
     state.toast = 'ลบข้อมูลทั้งหมดเรียบร้อย — ระบบพร้อมใช้งานจริง';
     clearTimeout(toastTimer);
@@ -901,6 +936,7 @@ async function changeAdminPw() {
   try {
     await db.collection('settings').doc('admin').set({ password: newPw }, { merge: true });
     ADMIN_PW = newPw;
+    logAction('เปลี่ยนรหัสผ่าน Admin', '');
     state.toast = 'เปลี่ยนรหัสผ่านเรียบร้อย';
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { state.toast = ''; render(); }, 3200);
@@ -922,6 +958,7 @@ function removeDoctor(docId) {
     if (name) {
       db.collection('doctors').where('name','==',name).limit(1).get().then(snap=>{
         snap.docs.forEach(doc=>doc.ref.delete());
+        logAction('ลบแพทย์', name);
       });
     }
   }
@@ -1103,6 +1140,7 @@ function deleteBooking(id) {
   if (!confirm('ยกเลิกการจองของ "'+b.prefix+' '+b.firstName+' '+b.lastName+'" (HN '+b.hn+') ใช่หรือไม่?\n\nรายการนี้จะถูกลบออกจากระบบถาวร — ward สามารถจองใหม่ได้ทันที')) return;
   state.bookings=state.bookings.filter(x=>String(x.id)!==String(id));
   persist();
+  logAction('ยกเลิกการจอง', b.prefix+' '+b.firstName+' '+b.lastName+' (HN '+b.hn+')');
   state.toast='ยกเลิกการจองเรียบร้อย — ward จองใหม่ได้เลย';
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>{state.toast='';render();},3200);
   render();
