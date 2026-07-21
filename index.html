@@ -129,38 +129,45 @@ function setupRealtimeListener() {
   }, err => console.error('Listener error:', err));
 
   db.collection('doctors').onSnapshot(snap => {
-    DOCTORS = snap.docs.map(doc => doc.data().name).sort();
+    DOCTORS = [...new Set(snap.docs.map(doc => doc.data().name).filter(Boolean))].sort();
     state.doctors = DOCTORS;
     render();
   }, err => console.error('Doctors listener error:', err));
 
-  db.collection('wards').onSnapshot(snap => {
+  // seed + dedup รายชื่อ ป้องกันชื่อซ้ำ (เกิดจากหลายเครื่องเปิดพร้อมกันตอน collection ยังว่าง)
+  const seedDedupList = (col, defaults, apply) => db.collection(col).onSnapshot(snap => {
+    if (snap.metadata.fromCache) return; // อย่าทำงานจาก cache — กัน seed/ลบซ้ำตอนเน็ตสะดุด
     if (snap.empty) {
-      // ครั้งแรก: ย้ายรายชื่อ ward เดิมจากโค้ดขึ้น Firebase อัตโนมัติ
       const batch = db.batch();
-      WARDS.forEach((w, i) => batch.set(db.collection('wards').doc(), { name: w, order: i }));
-      batch.commit().catch(e => console.error('Ward seed error:', e));
+      defaults.forEach((n, i) => batch.set(db.collection(col).doc(), { name: n, order: i }));
+      batch.commit().catch(e => console.error(col+' seed error:', e));
       return;
     }
-    WARDS = snap.docs.map(doc => doc.data()).sort((a,b) => (a.order ?? 9e15) - (b.order ?? 9e15)).map(x => x.name);
+    const docs = snap.docs.map(d => ({ id: d.id, name: d.data().name, order: d.data().order }))
+      .filter(d => d.name).sort((a,b) => (a.order ?? 9e15) - (b.order ?? 9e15));
+    // ลบเอกสารชื่อซ้ำอัตโนมัติ — เก็บอันแรกของแต่ละชื่อ ลบที่เหลือ (ทำงานฝั่งเซิร์ฟเวอร์เท่านั้น)
+    const seen = new Set(), dupIds = [];
+    docs.forEach(d => { if (seen.has(d.name)) dupIds.push(d.id); else seen.add(d.name); });
+    if (dupIds.length) {
+      const b = db.batch();
+      dupIds.forEach(id => b.delete(db.collection(col).doc(id)));
+      b.commit().catch(e => console.error(col+' dedup error:', e));
+    }
+    apply([...seen]); // รายชื่อไม่ซ้ำ เรียงตาม order
+    render();
+  }, err => console.error(col+' listener error:', err));
+
+  seedDedupList('wards', WARDS, (names) => {
+    WARDS = names;
     const oi = WARDS.indexOf('อื่นๆ');
     if (oi > -1) WARDS.push(WARDS.splice(oi, 1)[0]); // "อื่นๆ" อยู่ท้ายเสมอ
     state.wards = WARDS;
-    render();
-  }, err => console.error('Wards listener error:', err));
+  });
 
-  db.collection('nurses').onSnapshot(snap => {
-    if (snap.empty) {
-      // ครั้งแรก: ย้ายรายชื่อพยาบาล ICU จากโค้ดขึ้น Firebase อัตโนมัติ
-      const batch = db.batch();
-      ICU_NURSES.forEach((n, i) => batch.set(db.collection('nurses').doc(), { name: n, order: i }));
-      batch.commit().catch(e => console.error('Nurse seed error:', e));
-      return;
-    }
-    ICU_NURSES = snap.docs.map(doc => doc.data()).sort((a,b) => (a.order ?? 9e15) - (b.order ?? 9e15)).map(x => x.name);
+  seedDedupList('nurses', ICU_NURSES, (names) => {
+    ICU_NURSES = names;
     state.nurses = ICU_NURSES;
-    render();
-  }, err => console.error('Nurses listener error:', err));
+  });
 
   db.collection('logs').orderBy('at','desc').limit(50).onSnapshot(snap => {
     state.logs = snap.docs.map(d => d.data());
@@ -248,7 +255,7 @@ function removeWard(i) {
   const name = (state.wards.length ? state.wards : WARDS)[i];
   if (!name) return;
   if (confirm('ลบหน่วยงาน "' + name + '" ใช่หรือไม่?')) {
-    db.collection('wards').where('name','==',name).limit(1).get().then(snap=>{
+    db.collection('wards').where('name','==',name).get().then(snap=>{
       snap.docs.forEach(doc=>doc.ref.delete());
       logAction('ลบหน่วยงาน', name);
       state.toast = 'ลบหน่วยงานสำเร็จ';
@@ -292,7 +299,7 @@ function removeNurse(i) {
   const name = (state.nurses.length ? state.nurses : ICU_NURSES)[i];
   if (!name) return;
   if (confirm('ลบพยาบาล "' + name + '" ใช่หรือไม่?')) {
-    db.collection('nurses').where('name','==',name).limit(1).get().then(snap=>{
+    db.collection('nurses').where('name','==',name).get().then(snap=>{
       snap.docs.forEach(doc=>doc.ref.delete());
       logAction('ลบพยาบาล ICU', name);
       state.toast = 'ลบพยาบาลสำเร็จ';
@@ -971,7 +978,7 @@ function removeDoctor(docId) {
     const doctors = state.doctors || [];
     const name = doctors[parseInt(docId.split('_')[1])];
     if (name) {
-      db.collection('doctors').where('name','==',name).limit(1).get().then(snap=>{
+      db.collection('doctors').where('name','==',name).get().then(snap=>{
         snap.docs.forEach(doc=>doc.ref.delete());
         logAction('ลบแพทย์', name);
       });
